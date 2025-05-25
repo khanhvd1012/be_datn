@@ -1,0 +1,18 @@
+{
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "mongoose": "^8.15.0",
+    "vite-plugin-node": "^5.0.1"
+  },
+  "name": "back_end",
+  "version": "1.0.0",
+  "main": "index.js",
+  "devDependencies": {
+    "vite": "^6.3.5"
+  },
+  "scripts": {
+    "dev": "vite"
+  }
+}
