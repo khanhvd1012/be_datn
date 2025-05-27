@@ -14,6 +14,7 @@
     "vite": "^6.3.5"
   },
   "scripts": {
+    "type": "module",
     "dev": "vite"
   }
 }

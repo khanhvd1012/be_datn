@@ -5,14 +5,10 @@ import { validateCheckDuplicateBrand } from "../validators/brand_VLD";
 
 const brandRouter = Router();
 
-// brandRouter.get("/", (req, res) => {
-//   res.json({ message: "Brands endpoint" });
-// });
-
 brandRouter.get('/', getAllBrands);
 brandRouter.get('/:id', getBrandById);
-brandRouter.post('/', createBrand, validateCheckDuplicateBrand);
-brandRouter.put('/:id', updateBrand , validateCheckDuplicateBrand);
-brandRouter.delete('/:id', deleteBrand);
+brandRouter.post('/', validateCheckDuplicateBrand, createBrand);
+brandRouter.put('/:id', validateCheckDuplicateBrand, updateBrand);
+brandRouter.delete('/:id', deleteBrand);  // Fixed typo in :id
 
 export default brandRouter;

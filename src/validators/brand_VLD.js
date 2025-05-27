@@ -1,17 +1,16 @@
-import joi from 'joi';
-
+import Joi from 'joi';
 import brand_MD from '../models/brand_MD';
 
-const brandSchema = joi.object({
-    name: joi.string().required().messages({
+const brandSchema = Joi.object({
+    name: Joi.string().required().messages({
         'string.empty': 'Tên thương hiệu không được để trống',
         'any.required': 'Tên thương hiệu là bắt buộc'
     }),
-    description: joi.string().required().messages({
+    description: Joi.string().required().messages({
         'string.empty': 'Mô tả thương hiệu không được để trống',
         'any.required': 'Mô tả thương hiệu là bắt buộc'
     }),
-    logo_image: joi.string().uri().required().messages({
+    logo_image: Joi.string().uri().required().messages({
         'string.empty': 'Logo thương hiệu không được để trống',
         'string.uri': 'Logo thương hiệu phải là một URL hợp lệ',
         'any.required': 'Logo thương hiệu là bắt buộc'

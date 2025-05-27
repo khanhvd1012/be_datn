@@ -19,9 +19,12 @@ export const getAllBrands = async (req, res) => {
 export const getBrandById = async (req, res) => {
     try {
         // Lấy ID thương hiệu từ tham số URL
-        const brandId = req.params.id;
         // Tìm thương hiệu theo ID và populate dữ liệu sản phẩm liên quan
-        const brandData = await brand_MD.findById(brandId).populate('products');
+        const brandData = await brand_MD.findById(req.params.id)
+        .populate({
+            path: 'products',
+            select: 'name description price images category brand status quantity' // Chọn các trường cần thiết từ sản phẩm
+        });
         // Kiểm tra nếu không tìm thấy thương hiệu
         if (!brandData) {
             return res.status(404).json({ message: 'Thương hiệu không tồn tại' });
