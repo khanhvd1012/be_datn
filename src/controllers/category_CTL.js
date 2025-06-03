@@ -1,4 +1,6 @@
+import mongoose from "mongoose";
 import category_MD from "../models/category_MD";
+import product_MD from "../models/product_MD";
 
 // Hàm xử lý lấy tất cả danh mục
 export const getAllCategories = async (req, res) => {
@@ -19,7 +21,8 @@ export const getCategoryById = async (req, res) => {
         const CategoryId = await category_MD.findById(req.params.id)
             .populate({
                 path: 'products',
-                select: 'name description price images category brand status quantity' 
+                select: 'name description price images category brand status quantity',
+                model: product_MD
             });
         // Kiểm tra nếu không tìm thấy danh mục
         if (!CategoryId) {
@@ -67,11 +70,23 @@ export const updateCategory = async (req, res) => {
 // Hàm xử lý xóa danh mục 
 export const deleteCategory = async (req, res) => {
     try {
-        const categoryid = await category_MD.findByIdAndDelete(req.params.id);
-        if (!categoryid) {
+        const categoryId = req.params.id;
+        
+        // Kiểm tra danh mục có tồn tại không
+        const category = await category_MD.findById(categoryId);
+        if (!category) {
             return res.status(404).json({ message: 'Danh mục không tồn tại' });
         }
-        res.status(200).json({ message: 'Danh mục đã được xóa thành công' });
+        
+        // Xóa tất cả sản phẩm thuộc danh mục này
+        await product_MD.deleteMany({ category: categoryId });
+
+        // Xóa danh mục
+        await category_MD.findByIdAndDelete(categoryId);
+        
+        res.status(200).json({ 
+            message: 'Danh mục và các sản phẩm thuộc danh mục đã được xóa thành công' 
+        });
     } catch (error) {
         console.error('Lỗi khi xóa danh mục:', error);
         res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });

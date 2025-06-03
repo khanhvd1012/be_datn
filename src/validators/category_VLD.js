@@ -14,15 +14,21 @@ const categorySchema = Joi.object({
         }),
 
     description: Joi.string()
+        .required()
         .max(500)
         .messages({
-            'string.max': 'Mô tả không được vượt quá 500 ký tự'
+            'string.empty': 'Mô tả danh mục không được để trống',
+            'string.max': 'Mô tả không được vượt quá 500 ký tự',
+            'any.required': 'Mô tả danh mục là bắt buộc'
         }),
 
     logo_image: Joi.string()
+        .required()
         .uri()
         .messages({
-            'string.uri': 'Định dạng URL hình ảnh không hợp lệ'
+            'string.empty': 'Logo không được để trống',
+            'string.uri': 'Định dạng URL hình ảnh không hợp lệ',
+            'any.required': 'Logo là bắt buộc'
         })
 });
 

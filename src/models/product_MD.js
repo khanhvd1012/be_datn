@@ -5,7 +5,7 @@ const productSchema = new mongoose.Schema({
     name:{
         type:String,required:true
     },
-    description:{String},
+    description:{type: String},
     brand:{type:mongoose.Schema.Types.ObjectId,ref:"Brand"},
     category:{type:mongoose.Schema.Types.ObjectId,ref:"Category"},
     gender:{type:String,enum:['unisex','male','female']},

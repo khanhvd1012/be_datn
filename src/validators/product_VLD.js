@@ -50,16 +50,52 @@ const productSchema = Joi.object({
         })
 });
 
-export const validateProduct = (req, res, next) => {
-    const { error } = productSchema.validate(req.body, { abortEarly: false });
-    
-    if (error) {
-        const errors = error.details.map(detail => ({
-            field: detail.context.key,
-            message: detail.message
-        }));
-        return res.status(400).json({ errors });
+import Product from "../models/product_MD.js";
+
+export const validateProduct = async (req, res, next) => {
+    try {
+        // Validate schema first
+        const { error } = productSchema.validate(req.body, { abortEarly: false });
+        
+        if (error) {
+            const errors = error.details.map(detail => ({
+                field: detail.context.key,
+                message: detail.message
+            }));
+            return res.status(400).json({ errors });
+        }
+
+        // Check for duplicate product name
+        const existingProductByName = await Product.findOne({
+            name: { $regex: new RegExp(`^${req.body.name}$`, 'i') } // Case insensitive search
+        });
+
+        // If creating new product (no id) and name exists
+        if (!req.params.id && existingProductByName) {
+            return res.status(400).json({
+                errors: [{
+                    field: 'name',
+                    message: 'Tên sản phẩm đã tồn tại'
+                }]
+            });
+        }
+
+        // If updating product (has id) and name exists on a different product
+        if (req.params.id && existingProductByName && existingProductByName._id.toString() !== req.params.id) {
+            return res.status(400).json({
+                errors: [{
+                    field: 'name',
+                    message: 'Tên sản phẩm đã tồn tại'
+                }]
+            });
+        }
+        
+        next();
+    } catch (error) {
+        console.error('Product validation error:', error);
+        return res.status(500).json({
+            message: 'Error validating product data',
+            error: error.message
+        });
     }
-    
-    next();
 };
