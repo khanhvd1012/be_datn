@@ -17,7 +17,7 @@ const brandSchema = Joi.object({
     }),
 });
 
-export const validateCheckDuplicateBrand = async (name) => {
+export const validateCheckDuplicateBrand = async (req, res, next) => {
     try {
         // Kiểm tra cauc dữ liệu đầu vào
         const { error } = brandSchema.validate(req.body, { abortEarly: false });
@@ -41,7 +41,6 @@ export const validateCheckDuplicateBrand = async (name) => {
                 }]
             });
         }
-
 
         // Nếu đang cập nhật (có id) và tìm thấy brand trùng tên nhưng không phải brand hiện tại
         if (req.params.id && existingBrand && existingBrand._id.toString() !== req.params.id) {

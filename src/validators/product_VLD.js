@@ -10,13 +10,13 @@ const productSchema = Joi.object({
             'string.min': 'Tên sản phẩm phải có ít nhất 2 ký tự',
             'string.max': 'Tên sản phẩm không được vượt quá 100 ký tự'
         }),
-    
+
     description: Joi.string()
         .max(1000)
         .messages({
             'string.max': 'Mô tả không được vượt quá 1000 ký tự'
         }),
-    
+
     brand: Joi.string()
         .pattern(/^[0-9a-fA-F]{24}$/)
         .required()
@@ -24,7 +24,7 @@ const productSchema = Joi.object({
             'string.pattern.base': 'Định dạng ID thương hiệu không hợp lệ',
             'string.empty': 'ID thương hiệu không được để trống'
         }),
-    
+
     category: Joi.string()
         .pattern(/^[0-9a-fA-F]{24}$/)
         .required()
@@ -32,7 +32,7 @@ const productSchema = Joi.object({
             'string.pattern.base': 'Định dạng ID danh mục không hợp lệ',
             'string.empty': 'ID danh mục không được để trống'
         }),
-    
+
     gender: Joi.string()
         .valid('unisex', 'male', 'female')
         .required()
@@ -40,14 +40,32 @@ const productSchema = Joi.object({
             'any.only': 'Giới tính phải là unisex, nam hoặc nữ',
             'string.empty': 'Giới tính không được để trống'
         }),
-    
+        
     variants: Joi.array()
         .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
-        .min(1)
         .messages({
-            'array.min': 'Phải có ít nhất một biến thể',
             'string.pattern.base': 'Định dạng ID biến thể không hợp lệ'
-        })
+        }),
+
+    images: Joi.array()
+        .items(Joi.string().uri())
+        .messages({
+            'string.uri': 'URL hình ảnh không hợp lệ'
+        }),
+
+    price: Joi.number()
+        .min(0)
+        .required()
+        .messages({
+            'number.base': 'Giá phải là một số',
+            'number.min': 'Giá không được âm',
+            'any.required': 'Giá không được để trống'
+        }), status: Joi.string()
+            .valid('inStock', 'outOfStock')
+            .default('inStock')
+            .messages({
+                'any.only': 'Trạng thái phải là inStock hoặc outOfStock'
+            })
 });
 
 import Product from "../models/product_MD.js";
@@ -56,7 +74,7 @@ export const validateProduct = async (req, res, next) => {
     try {
         // Validate schema first
         const { error } = productSchema.validate(req.body, { abortEarly: false });
-        
+
         if (error) {
             const errors = error.details.map(detail => ({
                 field: detail.context.key,
@@ -89,7 +107,7 @@ export const validateProduct = async (req, res, next) => {
                 }]
             });
         }
-        
+
         next();
     } catch (error) {
         console.error('Product validation error:', error);
