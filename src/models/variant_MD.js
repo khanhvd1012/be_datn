@@ -1,24 +1,45 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
+
+
 
 const variantSchema = new mongoose.Schema({
-    size: {
-        type: String,
+    product_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Product',
         required: true
+    },
+    sku: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true
     },
     color: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
-    quantity: {
+    size: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    price: {
         type: Number,
         required: true,
         min: 0
     },
-    product: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Product',
-        required: true
-    }
-}, { timestamps: true });
+    image_url: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    import_price: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+
+},{ timestamps: true });
 
 export default mongoose.model('Variant', variantSchema);
