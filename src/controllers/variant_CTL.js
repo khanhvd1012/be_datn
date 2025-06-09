@@ -1,7 +1,6 @@
 import variant_MD from "../models/variant_MD";
-
-
-
+import stock_MD from "../models/stock_MD";
+import stockHistory_MD from "../models/stockHistory_MD";
 export const createVariant = async (req, res) => {
     try {
         // Tạo biến thể mới 
@@ -12,14 +11,14 @@ export const createVariant = async (req, res) => {
         });
 
         // Tạo bản ghi tồn kho ban đầu
-        const stock = await Stock.findById({
+        const stock = await stock_MD.create({
             product_variant_id: Variant._id,
             quantity: req.body.initial_stock || 0
         });
 
         // Ghi lại lịch sử nếu có số lượng ban đầu
         if (req.body.initial_stock) {
-            await StockHistory.create({
+            await stockHistory_MD.create({
                 stock_id: stock._id,
                 quantity: req.body.initial_stock,
                 reason: 'Số lượng ban đầu',
@@ -64,7 +63,7 @@ export const getAllVariants = async (req, res) => {
 
         // Thêm thông tin kho cho từng biến thể
         const variantsWithStock = await Promise.all(variant.map(async (item) => {
-            const stock = await Stock.findOne({ product_variant_id: item._id });
+            const stock = await stock_MD.findOne({ product_variant_id: item._id });
             return {
                 ...item.toObject(),
                 stock: stock ? stock.quantity : 0
@@ -86,12 +85,14 @@ export const getAllVariants = async (req, res) => {
 
 export const getVariantById = async (req, res) => {
     try {
+        // Tìm biến thể theo ID và populate các sản phẩm liên quan
         const variant = await variant_MD.findById(req.params.id).populate('products');
         if (!variant) {
             return res.status(404).json({ message: 'Biến thể không tồn tại' });
         }
-
-        const stock = await Stock.findOne({ product_variant_id: variant._id });
+        // Lấy thông tin kho cho biến thể
+        // Nếu không có kho, trả về số lượng là 0
+        const stock = await stock_MD.findOne({ product_variant_id: variant._id });
         return res.status(200).json({
             message: 'Lấy biến thể thành công',
             data: {
@@ -116,9 +117,9 @@ export const deleteVariant = async (req, res) => {
         }
 
         // Xóa các bản ghi liên quan trong kho và lịch sử kho nếu cần
-        const stock = await Stock.findOneAndDelete({ product_variant_id: variant._id });
+        const stock = await stock_MD.findOneAndDelete({ product_variant_id: variant._id });
         if (stock) {
-            await StockHistory.deleteMany({ stock_id: stock._id });
+            await stockHistory_MD.deleteMany({ stock_id: stock._id });
             await stock.remove();
         }
         return res.status(200).json({ message: 'Biến thể đã được xóa thành công' });
@@ -133,21 +134,24 @@ export const deleteVariant = async (req, res) => {
 
 export const updateStock = async (req, res) => {
     try {
+        // Kiểm tra dữ liệu đầu vào
         const { quantity_change, reason } = req.body;
-        const stock = await Stock.findOne({ product_variant_id: req.params.id });
+        const stock = await stock_MD.findOne({ product_variant_id: req.params.id });
         if (!stock) {
             return res.status(404).json({ message: 'Biến thể không tồn tại trong kho' });
         }
 
-        if (stock.quantity += quantity_change < 0) {
+        // Kiểm tra số lượng tồn kho sau khi thay đổi
+        if (stock.quantity + quantity_change < 0) {
             return res.status(400).json({ message: 'Số lượng kho không đủ để thực hiện thay đổi' });
         }
+        // Cập nhật số lượng tồn kho
         stock.quantity += quantity_change;
         stock.last_updated = new Date();
         await stock.save();
 
         // Ghi lại lịch sử tồn kho
-        await stockHistory.create({
+        await stockHistory_MD.create({
             stock_id: stock._id,
             quantity_change,
             reason: reason || 'Cập nhật tồn kho'
