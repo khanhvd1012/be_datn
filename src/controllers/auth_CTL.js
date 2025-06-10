@@ -88,26 +88,49 @@ export const logout = async (req, res) => {
         res.clearCookie('token');
         res.clearCookie('refreshToken');
 
-        return res.status(200).json({ 
+        return res.status(200).json({
             message: "Đăng xuất thành công",
-            success: true 
+            success: true
         });
     } catch (error) {
         console.error('Logout error:', error);
-        return res.status(500).json({ 
+        return res.status(500).json({
             message: "Đăng xuất thất bại",
-            error: error.message 
+            error: error.message
         });
     }
 }
 
-// Add middleware to check blacklisted tokens
-export const checkTokenBlacklist = (req, res, next) => {
-    const token = req.headers.authorization?.split(' ')[1];
-    
-    if (token && tokenBlacklist.includes(token)) {
-        return res.status(401).json({ message: "Token đã bị vô hiệu hóa" });
+export const getProfile = async (req, res) => {
+    try {
+        const user = await user_MD.findById(req.user._id).select("-password");
+        if (!user) {
+            return res.status(401).json({ message: "Người dùng không tồn tại" });
+        }
+
+        return res.status(200).json({
+            user: { ...user.toObject(), password: undefined },
+            message: "Lấy thông tin người dùng thành công"
+        });
+    } catch (error) {
+        return res.status(500).json({ message: "Lấy thông tin người dùng thất bại" });
     }
-    
-    next();
+}
+
+export const updateProfile = async (req, res) => {
+    try {
+        // Loại bỏ password khỏi dữ liệu cập nhật
+        const { password, ...updateData } = req.body;
+
+        // Cập nhật thông tin và trả về user đã cập nhật
+        const user = await user_MD.findByIdAndUpdate(
+            req.user._id,
+            updateData,
+            { new: true }
+        ).select("-password");
+
+        return res.status(200).json(user);
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
+    }
 }
