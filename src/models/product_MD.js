@@ -11,7 +11,7 @@ const productSchema = new mongoose.Schema({
     },
     brand: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Brand"
+        ref: "Brands"
     },
     category: {
         type: mongoose.Schema.Types.ObjectId,
@@ -23,7 +23,7 @@ const productSchema = new mongoose.Schema({
     },
     variants: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Variant"
+        ref: "Variants"
     }],
     images: [{
         type: String
@@ -42,4 +42,4 @@ const productSchema = new mongoose.Schema({
 
 productSchema.plugin(mongoosePaginate);
 
-export default mongoose.models.Products || mongoose.model("Products", productSchema);
+export default mongoose.model("Products", productSchema);

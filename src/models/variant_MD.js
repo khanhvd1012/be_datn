@@ -1,11 +1,10 @@
 import mongoose from "mongoose";
 
 
-
 const variantSchema = new mongoose.Schema({
     product_id: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Product',
+        ref: 'Products',
         required: true
     },
     sku: {
@@ -42,4 +41,4 @@ const variantSchema = new mongoose.Schema({
 
 },{ timestamps: true });
 
-export default mongoose.model('Variant', variantSchema);
+export default mongoose.model('Variants', variantSchema);

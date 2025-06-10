@@ -15,7 +15,7 @@ const categorySchema = new mongoose.Schema({
     },
     products: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Product'
+        ref: 'Products'
     }],
 }, { timestamps: true });
 export default mongoose.model("Categories", categorySchema);

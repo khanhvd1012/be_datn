@@ -1,9 +1,14 @@
 import variant_MD from "../models/variant_MD";
 import stock_MD from "../models/stock_MD";
 import stockHistory_MD from "../models/stockHistory_MD";
+import product_MD from "../models/product_MD";
 export const createVariant = async (req, res) => {
     try {
         // Tạo biến thể mới 
+        const product = await product_MD.findById(req.body.product_id);
+        if (!product) {
+            return res.status(404).json({ message: 'Sản phẩm không tồn tại' });
+        }
         const Variant = await variant_MD.create(req.body);
         res.status(201).json({
             message: 'Variant created successfully',
@@ -59,7 +64,7 @@ export const updateVariant = async (req, res) => {
 
 export const getAllVariants = async (req, res) => {
     try {
-        const variant = await variant_MD.find().populate('products');
+        const variant = await variant_MD.find().populate('product_id');
 
         // Thêm thông tin kho cho từng biến thể
         const variantsWithStock = await Promise.all(variant.map(async (item) => {
@@ -86,7 +91,7 @@ export const getAllVariants = async (req, res) => {
 export const getVariantById = async (req, res) => {
     try {
         // Tìm biến thể theo ID và populate các sản phẩm liên quan
-        const variant = await variant_MD.findById(req.params.id).populate('products');
+        const variant = await variant_MD.findById(req.params.id).populate('product_id');
         if (!variant) {
             return res.status(404).json({ message: 'Biến thể không tồn tại' });
         }
