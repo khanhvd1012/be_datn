@@ -8,6 +8,7 @@ import authRouter from "./auth_RT";
 import cartRouter from "./cart_RT";
 import orderRouter from "./order_RT";
 import voucherRouter from "./voucher_RT";
+import reviewRouter from "./review_RT";
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use("/stocks", stockRouter);
 router.use("/cart", cartRouter);   
 router.use("/orders", orderRouter);
 router.use("/vouchers", voucherRouter);
+router.use("/reviews", reviewRouter);
 
 export default router;
