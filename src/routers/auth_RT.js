@@ -1,11 +1,14 @@
 import { Router } from "express";
-import { register, login, logout } from "../controllers/auth_CTL";
-import { checkTokenBlacklist } from "../middleware/checkToken_MID";
+import { register, login, logout, getProfile, updateProfile } from "../controllers/auth_CTL";
+import { validateRegister } from "../validators/auth_VLD";
+import authMiddleware from "../middleware/auth_MID";
 
 const AuthRouter = Router();
-
-AuthRouter.post("/register", register);
+    
+AuthRouter.post("/register", validateRegister, register);
 AuthRouter.post("/login", login);
-AuthRouter.post("/logout", checkTokenBlacklist, logout);
+AuthRouter.post("/logout", authMiddleware, logout);
+AuthRouter.get("/profile", authMiddleware, getProfile);
+AuthRouter.put("/profile", authMiddleware, updateProfile);
 
 export default AuthRouter;

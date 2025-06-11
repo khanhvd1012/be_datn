@@ -1,11 +1,16 @@
-import express from "express"
+import { Router } from "express"
 import { getProductReviews, createReview, updateReview, deleteReview } from "../controllers/review_CLT"
+import { validateReview } from "../validators/review_VLD"
+import authMiddleware from "../middleware/auth_MID"
 
-const reviewRouter = express.Router()
+const reviewRouter = Router()
 
+// Public routes
 reviewRouter.get("/:product_id", getProductReviews)
-reviewRouter.post("/", createReview)
-reviewRouter.put("/:id", updateReview)
-reviewRouter.delete("/:id", deleteReview)
+
+// Protected routes (require authentication)
+reviewRouter.post("/create", authMiddleware, validateReview, createReview)
+reviewRouter.put("/:id", authMiddleware, validateReview, updateReview)
+reviewRouter.delete("/:id", authMiddleware, deleteReview)
 
 export default reviewRouter

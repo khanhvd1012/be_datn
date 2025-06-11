@@ -1,14 +1,17 @@
 import { Router } from "express";
-import { createBrand, deleteBrand, getAllBrands, getBrandById, updateBrand } from "../controllers/brand_CTL";
-import { validateCheckDuplicateBrand } from "../validators/brand_VLD";
-
+import { createBrand, getAllBrands, getBrandById, updateBrand, deleteBrand } from "../controllers/brand_CTL";
+import { validateBrand } from "../validators/brand_VLD";
+import authMiddleware from "../middleware/auth_MID";
 
 const brandRouter = Router();
 
-brandRouter.get('/', getAllBrands);
-brandRouter.get('/:id', getBrandById);
-brandRouter.post('/', validateCheckDuplicateBrand, createBrand);
-brandRouter.put('/:id', validateCheckDuplicateBrand, updateBrand);
-brandRouter.delete('/:id', deleteBrand);  // Fixed typo in :id
+// Public routes
+brandRouter.get("/", getAllBrands);
+brandRouter.get("/:id", getBrandById);
+
+// Protected routes (require authentication)
+brandRouter.post("/create", authMiddleware, validateBrand, createBrand);
+brandRouter.put("/:id", authMiddleware, validateBrand, updateBrand);
+brandRouter.delete("/:id", authMiddleware, deleteBrand);
 
 export default brandRouter;

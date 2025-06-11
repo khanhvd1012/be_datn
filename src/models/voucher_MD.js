@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { updateVoucherOnSave } from "../middleware/voucher_MID";
 
 const voucherSchema = new mongoose.Schema({
     code: { 
@@ -51,5 +52,8 @@ const voucherSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// Add middleware to update voucher status before save
+voucherSchema.pre('save', updateVoucherOnSave);
 
 export default mongoose.model("Voucher", voucherSchema);

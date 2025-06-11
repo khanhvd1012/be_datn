@@ -1,12 +1,14 @@
 import { Router } from "express";
-import { createOder, getOrders, getOrderById, updateOrderStatus, cancelOrder } from "../controllers/oder_CTL";
+import authMiddleware from "../middleware/auth_MID";
+import { createOrder, getOrders, getOrderById, updateOrderStatus, cancelOrder } from "../controllers/order_CTL";
 
 const orderRouter = Router();
 
-orderRouter.post("/create", createOder);
-orderRouter.get("/", getOrders);
-orderRouter.get("/:id", getOrderById);
-orderRouter.put("/:id/status", updateOrderStatus);
-orderRouter.put("/:id/cancel", cancelOrder);
+// All order routes require authentication
+orderRouter.post("/create", authMiddleware, createOrder);
+orderRouter.get("/", authMiddleware, getOrders);
+orderRouter.get("/:id", authMiddleware, getOrderById);
+orderRouter.put("/:id/status", authMiddleware, updateOrderStatus);
+orderRouter.put("/:id/cancel", authMiddleware, cancelOrder);
 
 export default orderRouter;

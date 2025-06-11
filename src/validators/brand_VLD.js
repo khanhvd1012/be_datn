@@ -17,7 +17,7 @@ const brandSchema = Joi.object({
     }),
 });
 
-export const validateCheckDuplicateBrand = async (req, res, next) => {
+export const validateBrand = async (req, res, next) => {
     try {
         // Kiểm tra cauc dữ liệu đầu vào
         const { error } = brandSchema.validate(req.body, { abortEarly: false });

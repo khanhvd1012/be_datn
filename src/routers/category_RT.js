@@ -1,13 +1,17 @@
 import { Router } from "express";
-import { createCategory, deleteCategory, getAllCategories, getCategoryById, updateCategory } from "../controllers/category_CTL";
+import { createCategory, getAllCategories, getCategoryById, updateCategory, deleteCategory } from "../controllers/category_CTL";
 import { validateCategory } from "../validators/category_VLD";
+import authMiddleware from "../middleware/auth_MID";
 
 const categoryRouter = Router();
 
+// Public routes
 categoryRouter.get("/", getAllCategories);
 categoryRouter.get("/:id", getCategoryById);
-categoryRouter.post("/", validateCategory, createCategory);
-categoryRouter.put("/:id", validateCategory, updateCategory);
-categoryRouter.delete("/:id", deleteCategory);
+
+// Protected routes (require authentication)
+categoryRouter.post("/create", authMiddleware, validateCategory, createCategory);
+categoryRouter.put("/:id", authMiddleware, validateCategory, updateCategory);
+categoryRouter.delete("/:id", authMiddleware, deleteCategory);
 
 export default categoryRouter;

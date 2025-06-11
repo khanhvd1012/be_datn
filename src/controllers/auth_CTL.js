@@ -2,6 +2,7 @@ import user_MD from "../models/auth_MD";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import { tokenBlacklist } from "../middleware/auth_MID";
 
 dotenv.config({ path: './.env' });
 
@@ -65,24 +66,14 @@ export const login = async (req, res) => {
 
 export const logout = async (req, res) => {
     try {
-        const { userId } = req.user;
         const token = req.headers.authorization?.split(' ')[1];
 
         if (!token) {
             return res.status(401).json({ message: "Không tìm thấy token" });
         }
 
-        const user = await user_MD.findById(userId);
-        if (!user) {
-            return res.status(401).json({ message: "Người dùng không tồn tại" });
-        }
-
         // Add token to blacklist
         tokenBlacklist.push(token);
-
-        // Clear user's refresh token
-        user.refreshToken = null;
-        await user.save();
 
         // Clear cookies if they exist
         res.clearCookie('token');

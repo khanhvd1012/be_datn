@@ -1,5 +1,17 @@
 import Joi from 'joi';
 
+/**
+ * Schema validation cho voucher
+ * Bao gồm các trường:
+ * - code: Mã voucher (3-20 ký tự, viết hoa)
+ * - type: Loại voucher (percentage hoặc fixed)
+ * - value: Giá trị giảm giá (số dương, tối đa 100% nếu là percentage)
+ * - maxDiscount: Giảm giá tối đa (số dương, có thể null)
+ * - minOrderValue: Giá trị đơn hàng tối thiểu (số dương, mặc định 0)
+ * - startDate: Ngày bắt đầu (phải sau thời điểm hiện tại)
+ * - endDate: Ngày kết thúc (phải sau ngày bắt đầu)
+ * - quantity: Số lượng voucher (số nguyên dương)
+ */
 const voucherSchema = Joi.object({
     code: Joi.string()
         .required()
@@ -75,6 +87,12 @@ const voucherSchema = Joi.object({
         })
 });
 
+/**
+ * Middleware validate dữ liệu voucher
+ * @param {Object} req - Request object chứa thông tin voucher cần validate
+ * @param {Object} res - Response object
+ * @param {Function} next - Callback function để chuyển sang middleware tiếp theo
+ */
 export const validateVoucher = (req, res, next) => {
     const { error } = voucherSchema.validate(req.body, { abortEarly: false });
     

@@ -4,6 +4,9 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: './.env' });
 
+// Add token blacklist array
+const tokenBlacklist = [];
+
 const authMiddleware = async (req, res, next) => {
     try {
         const token = req.headers['authorization']?.split(' ')[1];
@@ -11,7 +14,11 @@ const authMiddleware = async (req, res, next) => {
         if (!token) {
             return res.status(404).json({ message: "Access token not found" });
         };
-        // nếu không có token thì trả về lỗi 404
+
+        // Check if token is blacklisted
+        if (tokenBlacklist.includes(token)) {
+            return res.status(401).json({ message: "Token đã bị vô hiệu hóa" });
+        }
 
         const decoded = jwt.verify(token, process.env.KEY_SECRET)
         // giải mã token bằng jwt.verify và truyền vào secret key là "nghiant"
@@ -29,4 +36,6 @@ const authMiddleware = async (req, res, next) => {
     }
 };
 
+// Export the tokenBlacklist array for use in other files
+export { tokenBlacklist };
 export default authMiddleware;

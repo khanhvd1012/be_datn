@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-
+import { updateProductOnVariantSave } from "../middleware/variant_MID";
 
 const variantSchema = new mongoose.Schema({
     product_id: {
@@ -40,5 +40,8 @@ const variantSchema = new mongoose.Schema({
     },
 
 },{ timestamps: true });
+
+
+variantSchema.pre('save', updateProductOnVariantSave);
 
 export default mongoose.model('Variants', variantSchema);

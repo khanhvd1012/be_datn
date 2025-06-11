@@ -1,5 +1,6 @@
 import mongoose from "mongoose"
 import mongoosePaginate from 'mongoose-paginate-v2';
+import { updateProductOnVariantSave } from "../middleware/variant_MID";
 
 const productSchema = new mongoose.Schema({
     name: {
@@ -41,5 +42,7 @@ const productSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 productSchema.plugin(mongoosePaginate);
+
+productSchema.pre('save', updateProductOnVariantSave);
 
 export default mongoose.model("Products", productSchema);
