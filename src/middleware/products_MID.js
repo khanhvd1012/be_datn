@@ -1,31 +1,38 @@
-import brand_MD from "../models/brand_MD";
-import category_MD from "../models/category_MD";
+import mongoose from 'mongoose';
 
-export const updateCategoryAndBrandOnProduct = async (req, res, next) => {
+export const updateCategoryAndBrandOnProductSave = async function (next) {
     try {
-        const products = this;
+        const product = this;
 
-        if(products.brand){
-            await brand_MD.findByIdAndUpdate(products.brand, {
-                $push: {
-                    products: products._id
-                }
-            })
+        // Chỉ thực hiện khi là document mới
+        if (!product.isNew) return next();
+
+        // Cập nhật Brand
+        if (product.brand) {
+            const brandUpdated = await mongoose.model('Brand').findByIdAndUpdate(
+                product.brand,
+                { $addToSet: { products: product._id } }, // dùng $addToSet để tránh trùng ID
+                { new: true }
+            );
+            if (!brandUpdated) {
+                throw new Error('Không tìm thấy brand để cập nhật');
+            }
         }
-        if(products.category){
-            await category_MD.findByIdAndUpdate(products.category, {
-                $push: {
-                    products: products._id
-                }
-            })
+
+        // Cập nhật Category
+        if (product.category) {
+            const categoryUpdated = await mongoose.model('Category').findByIdAndUpdate(
+                product.category,
+                { $addToSet: { products: product._id } },
+                { new: true }
+            );
+            if (!categoryUpdated) {
+                throw new Error('Không tìm thấy category để cập nhật');
+            }
         }
+
         next();
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "lỗi khi cập nhật danh mục và thương hiệu sản phẩm",
-            error: error.message
-        })
-        next(error);
+        next(new Error(`Lỗi khi cập nhật brand/category: ${error.message}`));
     }
-}
+};
