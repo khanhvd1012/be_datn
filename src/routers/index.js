@@ -6,6 +6,7 @@ import variantRouter from "./variant_RT";
 import stockRouter from "./stock_RT";
 import authRouter from "./auth_RT";
 import cartRouter from "./cart_RT";
+import orderRouter from "./order_RT";
 
 const router = Router();
 
@@ -15,6 +16,7 @@ router.use("/categories", categoryRouter);
 router.use("/products",productRoute);
 router.use("/variants", variantRouter);
 router.use("/stocks", stockRouter);
-router.use("/cart", cartRouter);    
+router.use("/cart", cartRouter);   
+router.use("/orders", orderRouter);
 
 export default router;
