@@ -10,44 +10,66 @@ const variantSchema = Joi.object({
             'string.empty': 'ID sản phẩm không được để trống'
         }),
 
-    color: Joi.string()
+    sizes: Joi.array()
+        .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
+        .min(1)
         .required()
         .messages({
-            'string.empty': 'Màu sắc không được để trống'
+            'array.min': 'Phải chọn ít nhất một size',
+            'array.base': 'Sizes phải là một mảng',
+            'any.required': 'Sizes không được để trống',
+            'string.pattern.base': 'Định dạng ID size không hợp lệ'
         }),
 
-    size: Joi.string()
+    quantity: Joi.number()
+        .min(0)
         .required()
         .messages({
-            'string.empty': 'Kích thước không được để trống'
+            'number.base': 'Số lượng phải là số',
+            'number.min': 'Số lượng không được âm',
+            'any.required': 'Số lượng không được để trống'
         }),
 
-    image_url: Joi.string()
-        .uri()
+    color_id: Joi.string()
+        .pattern(/^[0-9a-fA-F]{24}$/)
         .required()
         .messages({
-            'string.uri': 'Định dạng URL ảnh không hợp lệ',
-            'string.empty': 'URL ảnh không được để trống'
+            'string.pattern.base': 'Định dạng ID màu không hợp lệ',
+            'string.empty': 'ID màu không được để trống'
+        }),
+
+    sku: Joi.string()
+        .required()
+        .trim()
+        .messages({
+            'string.empty': 'SKU không được để trống'
         }),
 
     price: Joi.number()
         .min(0)
         .required()
         .messages({
-            'number.base': 'Giá bán phải là số',
-            'number.min': 'Giá bán không được âm',
-            'number.empty': 'Giá bán không được để trống'
+            'number.base': 'Giá phải là số',
+            'number.min': 'Giá không được âm',
+            'any.required': 'Giá không được để trống'
         }),
 
-    import_price: Joi.number()
-        .min(0)
-        .max(Joi.ref('price'))
+    images: Joi.array()
+        .items(Joi.string().uri())
+        .min(1)
         .required()
         .messages({
-            'number.base': 'Giá nhập phải là số',
-            'number.min': 'Giá nhập không được âm',
-            'number.max': 'Giá nhập không được cao hơn giá bán',
-            'number.empty': 'Giá nhập không được để trống'
+            'array.min': 'Phải có ít nhất một hình ảnh',
+            'array.base': 'Images phải là một mảng',
+            'string.uri': 'URL hình ảnh không hợp lệ',
+            'any.required': 'Images không được để trống'
+        }),
+
+    status: Joi.string()
+        .valid('active', 'inactive')
+        .default('active')
+        .messages({
+            'any.only': 'Trạng thái phải là active hoặc inactive'
         })
 });
 

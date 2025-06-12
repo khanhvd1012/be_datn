@@ -3,162 +3,251 @@ import Product from "../models/product_MD";
 import Category from "../models/category_MD";
 import Brand from "../models/brand_MD";
 import Variant from "../models/variant_MD";
+import Size from "../models/size_MD";
+import Color from "../models/color_MD";
 
 export const getAllProduct = async (req, res) => {
     try {
         const products = await Product.find()
-            .populate('category', 'name')
-            .populate('brand', 'name');
-        res.status(200).json(products);
+            .populate('category', '_id')
+            .populate('brand', '_id')
+            .populate('sizes', '_id')
+            .populate('colors', '_id')
+            .populate({
+                path: 'variants',
+                populate: [
+                    {
+                        path: 'sizes.size_id',
+                        model: 'Sizes',
+                        select: '_id'
+                    },
+                    { 
+                        path: 'color_id',
+                        select: '_id'
+                    }
+                ]
+            });
+        return res.status(200).json({
+            message: "Lấy danh sách sản phẩm thành công",
+            data: products
+        });
     } catch (error) {
         console.error('Lỗi khi lấy dữ liệu sản phẩm:', error);
-        res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });
+        return res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });
     }
 };
 
 export const getOneProduct = async (req, res) => {
     try {
-        // Validate object ID format
-        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-            return res.status(400).json({ message: "ID sản phẩm không hợp lệ" });
+        const id = req.params.id;
+        const product = await Product.findById(id)
+            .populate('category', '_id')
+            .populate('brand', '_id')
+            .populate('sizes', '_id')
+            .populate('colors', '_id')
+            .populate({
+                path: 'variants',
+                populate: [
+                    {
+                        path: 'sizes.size_id',
+                        model: 'Sizes',
+                        select: '_id'
+                    },
+                    { 
+                        path: 'color_id',
+                        select: '_id'
+                    }
+                ]
+            });
+        if (!product) {
+            return res.status(404).json({
+                message: "Không tìm thấy sản phẩm"
+            });
         }
-
-        // First try to find the product without population to check if it exists
-        const productExists = await Product.findById(req.params.id);
-        if (!productExists) {
-            return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
-        }
-
-        // Then try to populate fields one by one to identify any issues
-        try {
-            const product = await Product.findById(req.params.id)
-                .populate('category')
-                .populate('brand')
-                .populate('variants');
-
-            return res.status(200).json(product);
-        } catch (populateError) {
-            console.error('Error populating product references:', populateError);
-            // Return the unpopulated product if population fails
-            return res.status(200).json(productExists);
-        }
-    } catch (error) {
-        console.error('Error fetching product:', error);
-        return res.status(500).json({ 
-            message: "Lỗi khi lấy thông tin sản phẩm",
-            error: error.message
+        return res.status(200).json({
+            message: "Lấy sản phẩm thành công",
+            data: product
         });
+    } catch (error) {
+        console.error('Lỗi khi lấy dữ liệu sản phẩm:', error);
+        return res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });
     }
 };
 
 export const createProduct = async (req, res) => {
     try {
-        const productData = {
-            name: req.body.name,
-            description: req.body.description,
-            brand: req.body.brand,
-            category: req.body.category,
-            gender: req.body.gender,
-            variants: req.body.variants || [],
-            images: req.body.images || [],
-            price: req.body.price,
-            status: req.body.status || 'active'
-        };
+        const { error } = productSchema.validate(req.body, { abortEarly: false });
+        if (error) {
+            const errors = error.details.map((err) => err.message);
+            return res.status(400).json({
+                message: errors
+            });
+        }
 
-        const product = await Product.create(productData);
+        // Kiểm tra màu sắc của sản phẩm
+        const { colors, images } = req.body;
+        if (!colors || !Array.isArray(colors) || colors.length !== 1) {
+            return res.status(400).json({
+                message: "Sản phẩm phải có một màu"
+            });
+        }
 
-        // Lấy thông tin sản phẩm đã tạo với đầy đủ thông tin category và brand
+        // Kiểm tra images
+        if (!images || !Array.isArray(images) || images.length === 0) {
+            return res.status(400).json({
+                message: "Sản phẩm phải có ít nhất một hình ảnh"
+            });
+        }
+
+        // Kiểm tra tồn tại của màu
+        const colorId = new mongoose.Types.ObjectId(colors[0]);
+        const existingColor = await Color.findById(colorId);
+        if (!existingColor) {
+            return res.status(400).json({
+                message: "Màu sắc không tồn tại trong hệ thống"
+            });
+        }
+
+        // Create new product
+        const product = await Product.create({
+            ...req.body,
+            images: images // Đảm bảo lưu mảng images
+        });
+
+        // Create variants with proper reference to product
+        if (req.body.variants) {
+            const variantPromises = req.body.variants.map(variant => {
+                return Variant.create({
+                    ...variant,
+                    product_id: product._id
+                });
+            });
+            const variants = await Promise.all(variantPromises);
+            
+            // Update product with variant references
+            product.variants = variants.map(v => v._id);
+            await product.save();
+        }
+
+        // Fetch complete product with populated fields
         const populatedProduct = await Product.findById(product._id)
-            .populate('category')
-            .populate('brand');
+            .populate('category', '_id')
+            .populate('brand', '_id')
+            .populate('sizes', '_id')
+            .populate('colors', '_id')
+            .populate({
+                path: 'variants',
+                populate: [
+                    {
+                        path: 'sizes',
+                        select: '_id'
+                    },
+                    { 
+                        path: 'color_id',
+                        select: '_id'
+                    }
+                ]
+            });
 
-        // Cập nhật danh sách sản phẩm trong Category và Brand
-        await Category.findByIdAndUpdate(req.body.category, {
-            $push: { products: product._id }
-        });
-
-        await Brand.findByIdAndUpdate(req.body.brand, {
-            $push: { products: product._id }
-        });
-
-        // Trả về sản phẩm đã được tạo với đầy đủ thông tin
-        return res.status(201).json({
-            message: "Tạo sản phẩm thành công",
+        return res.status(200).json({
+            message: "Thêm sản phẩm thành công",
             data: populatedProduct
         });
     } catch (error) {
-        console.error("Lỗi khi tạo sản phẩm:", error);
-        return res.status(500).json({ 
-            message: "Lỗi khi tạo sản phẩm mới",
-            error: error.message 
-        });
+        console.error('Lỗi khi tạo sản phẩm:', error);
+        return res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });
     }
 };
 
 export const updateProduct = async (req, res) => {
     try {
-        // Lấy thông tin sản phẩm cũ
-        const oldProduct = await Product.findById(req.params.id);
-        if (!oldProduct) {
-            return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
-        }
-
-        // Chuẩn bị dữ liệu cập nhật
-        const updateData = {
-            name: req.body.name,
-            description: req.body.description,
-            brand: req.body.brand,
-            category: req.body.category,
-            gender: req.body.gender,
-            variants: req.body.variants,
-            images: req.body.images,
-            price: req.body.price,
-            status: req.body.status
-        };
-
-        // Cập nhật sản phẩm
-        const updatedProduct = await Product.findByIdAndUpdate(
-            req.params.id,
-            updateData,
-            { new: true }
-        ).populate('category').populate('brand');
-
-        // Nếu category thay đổi, cập nhật danh sách sản phẩm trong các category
-        if (oldProduct.category.toString() !== req.body.category) {
-            // Xóa sản phẩm khỏi category cũ
-            await Category.findByIdAndUpdate(oldProduct.category, {
-                $pull: { products: oldProduct._id }
-            });
-
-            // Thêm sản phẩm vào category mới
-            await Category.findByIdAndUpdate(req.body.category, {
-                $push: { products: oldProduct._id }
+        const id = req.params.id;
+        const { error } = productSchema.validate(req.body, { abortEarly: false });
+        if (error) {
+            const errors = error.details.map((err) => err.message);
+            return res.status(400).json({
+                message: errors
             });
         }
 
-        // Nếu brand thay đổi, cập nhật danh sách sản phẩm trong các brand
-        if (oldProduct.brand.toString() !== req.body.brand) {
-            // Xóa sản phẩm khỏi brand cũ
-            await Brand.findByIdAndUpdate(oldProduct.brand, {
-                $pull: { products: oldProduct._id }
-            });
-
-            // Thêm sản phẩm vào brand mới
-            await Brand.findByIdAndUpdate(req.body.brand, {
-                $push: { products: oldProduct._id }
+        // Kiểm tra màu sắc của sản phẩm
+        const { colors, images } = req.body;
+        if (!colors || !Array.isArray(colors) || colors.length !== 1) {
+            return res.status(400).json({
+                message: "Sản phẩm phải có đúng một màu"
             });
         }
+
+        // Kiểm tra images
+        if (!images || !Array.isArray(images) || images.length === 0) {
+            return res.status(400).json({
+                message: "Sản phẩm phải có ít nhất một hình ảnh"
+            });
+        }
+
+        // Kiểm tra tồn tại của màu
+        const colorId = new mongoose.Types.ObjectId(colors[0]);
+        const existingColor = await Color.findById(colorId);
+        if (!existingColor) {
+            return res.status(400).json({
+                message: "Màu sắc không tồn tại trong hệ thống"
+            });
+        }
+
+        // Update product basic info
+        const product = await Product.findByIdAndUpdate(id, req.body, { new: true });
+        if (!product) {
+            return res.status(404).json({
+                message: "Không tìm thấy sản phẩm"
+            });
+        }
+
+        // Handle variants update if provided
+        if (req.body.variants) {
+            // Remove old variants
+            await Variant.deleteMany({ product_id: id });
+
+            // Create new variants
+            const variantPromises = req.body.variants.map(variant => {
+                return Variant.create({
+                    ...variant,
+                    product_id: id
+                });
+            });
+            const newVariants = await Promise.all(variantPromises);
+
+            // Update product with new variant references
+            product.variants = newVariants.map(v => v._id);
+            await product.save();
+        }
+
+        // Fetch updated product with populated fields
+        const updatedProduct = await Product.findById(id)
+            .populate('category', '_id')
+            .populate('brand', '_id')
+            .populate('sizes', '_id')
+            .populate('colors', '_id')
+            .populate({
+                path: 'variants',
+                populate: [
+                    {
+                        path: 'sizes',
+                        select: '_id'
+                    },
+                    { 
+                        path: 'color_id',
+                        select: '_id'
+                    }
+                ]
+            });
 
         return res.status(200).json({
             message: "Cập nhật sản phẩm thành công",
             data: updatedProduct
         });
     } catch (error) {
-        console.error("Lỗi khi cập nhật sản phẩm:", error);
-        return res.status(500).json({ 
-            message: "Lỗi khi cập nhật sản phẩm",
-            error: error.message 
-        });
+        console.error('Lỗi khi cập nhật sản phẩm:', error);
+        return res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });
     }
 };
 
@@ -169,7 +258,7 @@ export const removeProduct = async (req, res) => {
             return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
         }
 
-        // Xóa sản phẩm khỏi danh sách của category và brand
+        // Remove references from category and brand
         await Category.findByIdAndUpdate(product.category, {
             $pull: { products: product._id }
         });
@@ -178,10 +267,26 @@ export const removeProduct = async (req, res) => {
             $pull: { products: product._id }
         });
 
-        // Xóa sản phẩm
+        // Remove references from sizes and colors
+        await Size.updateMany(
+            { _id: { $in: product.sizes } },
+            { $pull: { products: product._id } }
+        );
+
+        await Color.updateMany(
+            { _id: { $in: product.colors } },
+            { $pull: { products: product._id } }
+        );
+
+        // Delete all variants of the product
+        await Variant.deleteMany({ product_id: product._id });
+
+        // Delete the product
         await Product.findByIdAndDelete(req.params.id);
 
-        return res.status(200).json({ message: "Xóa sản phẩm thành công" });
+        return res.status(200).json({ 
+            message: "Xóa sản phẩm và các biến thể liên quan thành công" 
+        });
     } catch (error) {
         console.error("Lỗi khi xóa sản phẩm:", error);
         return res.status(500).json({ message: "Lỗi khi xóa sản phẩm" });
@@ -190,15 +295,35 @@ export const removeProduct = async (req, res) => {
 
 export const getProductVariants = async (req, res) => {
     try {
-        const product = await Product.findById(req.params.id).populate('variants');
+        const product = await Product.findById(req.params.id)
+            .populate('variants')
+            .populate('sizes')
+            .populate('colors');
+            
         if (!product) {
             return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
         }
+
+        const variants = await Variant.find({ product_id: req.params.id })
+            .populate({
+                path: 'sizes.size_id',
+                model: 'Sizes'
+            })
+            .populate('color_id');
+
         return res.status(200).json({
-            tenSanPham: product.name,
-            bienThe: product.variants
+            message: "Lấy thông tin biến thể thành công",
+            data: {
+                productName: product.name,
+                availableSizes: product.sizes,
+                availableColors: product.colors,
+                variants: variants
+            }
         });
     } catch (error) {
-        return res.status(500).json({ message: "Lỗi khi lấy danh sách biến thể" });
+        return res.status(500).json({ 
+            message: "Lỗi khi lấy danh sách biến thể",
+            error: error.message
+        });
     }
 };

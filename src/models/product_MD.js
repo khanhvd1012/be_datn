@@ -1,6 +1,5 @@
 import mongoose from "mongoose"
 import mongoosePaginate from 'mongoose-paginate-v2';
-import { updateProductOnVariantSave } from "../middleware/variant_MID";
 
 const productSchema = new mongoose.Schema({
     name: {
@@ -12,7 +11,7 @@ const productSchema = new mongoose.Schema({
     },
     brand: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Brands"
+        ref: "Brand"
     },
     category: {
         type: mongoose.Schema.Types.ObjectId,
@@ -24,7 +23,7 @@ const productSchema = new mongoose.Schema({
     },
     variants: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Variants"
+        ref: "Variant"
     }],
     images: [{
         type: String
@@ -43,6 +42,4 @@ const productSchema = new mongoose.Schema({
 
 productSchema.plugin(mongoosePaginate);
 
-productSchema.pre('save', updateProductOnVariantSave);
-
-export default mongoose.model("Products", productSchema);
+export default mongoose.models.Products || mongoose.model("Products", productSchema);

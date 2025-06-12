@@ -21,7 +21,7 @@ const productSchema = Joi.object({
         .pattern(/^[0-9a-fA-F]{24}$/)
         .required()
         .messages({
-            'string.pattern.base': 'Định dạng ID thương hiệu không hợp lệ',
+            'string.pattern.base': 'ID thương hiệu không hợp lệ',
             'string.empty': 'ID thương hiệu không được để trống'
         }),
 
@@ -29,27 +29,39 @@ const productSchema = Joi.object({
         .pattern(/^[0-9a-fA-F]{24}$/)
         .required()
         .messages({
-            'string.pattern.base': 'Định dạng ID danh mục không hợp lệ',
+            'string.pattern.base': 'ID danh mục không hợp lệ',
             'string.empty': 'ID danh mục không được để trống'
         }),
 
     gender: Joi.string()
-        .valid('unisex', 'male', 'female')
+        .valid('male', 'female', 'unisex')
         .required()
         .messages({
-            'any.only': 'Giới tính phải là unisex, nam hoặc nữ',
-            'string.empty': 'Giới tính không được để trống'
+            'any.only': 'Giới tính phải là male, female hoặc unisex',
+            'any.required': 'Giới tính không được để trống'
         }),
-        
-    variants: Joi.array()
+
+    sizes: Joi.array()
         .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
+        .min(1)
         .messages({
-            'string.pattern.base': 'Định dạng ID biến thể không hợp lệ'
+            'array.min': 'Phải chọn ít nhất một size',
+            'string.pattern.base': 'ID size không hợp lệ'
+        }),
+
+    colors: Joi.array()
+        .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
+        .min(1)
+        .messages({
+            'array.min': 'Phải chọn ít nhất một màu sắc',
+            'string.pattern.base': 'ID màu sắc không hợp lệ'
         }),
 
     images: Joi.array()
         .items(Joi.string().uri())
+        .min(1)
         .messages({
+            'array.min': 'Phải có ít nhất một hình ảnh',
             'string.uri': 'URL hình ảnh không hợp lệ'
         }),
 
@@ -60,12 +72,7 @@ const productSchema = Joi.object({
             'number.base': 'Giá phải là một số',
             'number.min': 'Giá không được âm',
             'any.required': 'Giá không được để trống'
-        }), status: Joi.string()
-            .valid('inStock', 'outOfStock')
-            .default('inStock')
-            .messages({
-                'any.only': 'Trạng thái phải là inStock hoặc outOfStock'
-            })
+        })
 });
 
 import Product from "../models/product_MD.js";

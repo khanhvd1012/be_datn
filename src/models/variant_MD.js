@@ -7,20 +7,26 @@ const variantSchema = new mongoose.Schema({
         ref: 'Products',
         required: true
     },
+    sizes: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Sizes',
+        required: true
+    }],
+    quantity: {
+        type: Number,
+        required: true,
+        min: 0,
+        default: 0
+    },
+    color_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Colors',
+        required: true
+    },
     sku: {
         type: String,
         required: true,
         unique: true,
-        trim: true
-    },
-    color: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    size: {
-        type: String,
-        required: true,
         trim: true
     },
     price: {
@@ -28,19 +34,17 @@ const variantSchema = new mongoose.Schema({
         required: true,
         min: 0
     },
-    image_url: {
+    images: [{
         type: String,
-        required: true,
-        trim: true
-    },
-    import_price: {
-        type: Number,
-        required: true,
-        min: 0
-    },
+        required: true
+    }],
+    status: {
+        type: String,
+        enum: ['active', 'inactive'],
+        default: 'active'
+    }
 
 },{ timestamps: true });
-
 
 variantSchema.pre('save', updateProductOnVariantSave);
 
