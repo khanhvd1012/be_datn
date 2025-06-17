@@ -10,7 +10,7 @@ categoryRouter.get("/", getAllCategories);
 categoryRouter.get("/:id", getCategoryById);
 
 // Protected routes (require authentication)
-categoryRouter.post("/create", authMiddleware, validateCategory, createCategory);
+categoryRouter.post("/", authMiddleware, validateCategory, createCategory);
 categoryRouter.put("/:id", authMiddleware, validateCategory, updateCategory);
 categoryRouter.delete("/:id", authMiddleware, deleteCategory);
 

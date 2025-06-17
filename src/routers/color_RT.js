@@ -1,6 +1,6 @@
 import express from 'express';
 import { getAll, getById, create, update, remove } from '../controllers/color_CTL.js';
-import { checkPermission } from '../middleware/auth_MID.js';
+import checkPermission from '../middleware/auth_MID.js';
 
 const router = express.Router();
 

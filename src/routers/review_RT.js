@@ -9,7 +9,7 @@ const reviewRouter = Router()
 reviewRouter.get("/:product_id", getProductReviews)
 
 // Protected routes (require authentication)
-reviewRouter.post("/create", authMiddleware, validateReview, createReview)
+reviewRouter.post("/", authMiddleware, validateReview, createReview)
 reviewRouter.put("/:id", authMiddleware, validateReview, updateReview)
 reviewRouter.delete("/:id", authMiddleware, deleteReview)
 

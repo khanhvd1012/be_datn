@@ -3,8 +3,7 @@ import mongoose from "mongoose";
 import { createVariant, deleteVariant, getAllVariants, getVariantById, updateStock, updateVariant } from "../controllers/variant_CTL";
 import { validateVariant } from "../validators/variant_VLD";
 import authMiddleware from "../middleware/auth_MID";
-import { checkDuplicateSKU } from "../middleware/Duplicate_MID";
-import { checkDuplicateColor } from "../middleware/variant_MID";
+import { checkDuplicateSKU, checkDuplicateColor } from "../middleware/variant_MID";
 
 
 const variantRouter = Router();

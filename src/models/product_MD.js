@@ -1,4 +1,4 @@
-import mongoose from "mongoose"
+import mongoose from "mongoose";
 import mongoosePaginate from 'mongoose-paginate-v2';
 
 const productSchema = new mongoose.Schema({
@@ -21,10 +21,15 @@ const productSchema = new mongoose.Schema({
         type: String,
         enum: ['unisex', 'male', 'female']
     },
-    variants: [{
+    sizes: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Variant"
-    }],
+        ref: "Sizes"
+    }],    
+    colors: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Colors',
+        required: true   
+    },
     images: [{
         type: String
     }],
@@ -32,12 +37,16 @@ const productSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 0
-    },    
+    },
     status: {
         type: String,
         enum: ['inStock', 'outOfStock'],
         default: 'inStock'
-    }
+    },
+    variants: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Variants"
+    }],
 }, { timestamps: true });
 
 productSchema.plugin(mongoosePaginate);

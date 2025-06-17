@@ -1,9 +1,10 @@
-import Cart_MD from "../models/cart_MD";
-import CartItem_MD from "../models/cartItem_MD";
-import Order_MD from "../models/order_MD";
-import OrderItem_MD from "../models/orderItem_MD";
-import Stock_MD from "../models/stock_MD";
-import StockHistory_MD from "../models/stockHistory_MD";
+import mongoose from "mongoose";
+import Cart_MD from "../models/cart_MD.js";
+import CartItem_MD from "../models/cartItem_MD.js";
+import Order_MD from "../models/order_MD.js";
+import OrderItem_MD from "../models/orderItem_MD.js";
+import Stock_MD from "../models/stock_MD.js";
+import StockHistory_MD from "../models/stockHistory_MD.js";
 
 export const createOder = async (req, res) => {
     try {

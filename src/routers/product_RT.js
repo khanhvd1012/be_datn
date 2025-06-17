@@ -18,9 +18,9 @@ productRouter.get("/", getAllProduct);
 productRouter.get("/:id", getOneProduct);
 
 // Protected routes (require authentication)
-productRouter.post("/create", authMiddleware, validateProduct, checkDuplicateProductColors, createProduct);
-productRouter.put("/:id", authMiddleware, validateProduct, checkDuplicateProductColors, updateProduct);
-productRouter.delete("/:id", authMiddleware, removeProduct);
+productRouter.post("/", validateProduct, checkDuplicateProductColors, createProduct);
+productRouter.put("/:id", validateProduct, checkDuplicateProductColors, updateProduct);
+productRouter.delete("/:id", removeProduct);
 productRouter.get("/:id/variants", getProductVariants);
 
 export default productRouter;

@@ -6,7 +6,7 @@ const cartRouter = Router();
 
 // All cart routes require authentication
 cartRouter.get("/", authMiddleware, getOneCart);
-cartRouter.post("/add", authMiddleware, addToCart);
+cartRouter.post("/", authMiddleware, addToCart);
 cartRouter.put("/update/:id", authMiddleware, updateCartItem);
 cartRouter.delete("/remove/:id", authMiddleware, removeFromCart);
 

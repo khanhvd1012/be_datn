@@ -10,7 +10,7 @@ brandRouter.get("/", getAllBrands);
 brandRouter.get("/:id", getBrandById);
 
 // Protected routes (require authentication)
-brandRouter.post("/create", authMiddleware, validateBrand, createBrand);
+brandRouter.post("/", authMiddleware, validateBrand, createBrand);
 brandRouter.put("/:id", authMiddleware, validateBrand, updateBrand);
 brandRouter.delete("/:id", authMiddleware, deleteBrand);
 

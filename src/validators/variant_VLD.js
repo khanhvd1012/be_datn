@@ -2,14 +2,6 @@ import Joi from "joi";
 
 
 const variantSchema = Joi.object({
-    product_id: Joi.string()
-        .pattern(/^[0-9a-fA-F]{24}$/)
-        .required()
-        .messages({
-            'string.pattern.base': 'Định dạng ID sản phẩm không hợp lệ',
-            'string.empty': 'ID sản phẩm không được để trống'
-        }),
-
     sizes: Joi.array()
         .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
         .min(1)
@@ -29,20 +21,28 @@ const variantSchema = Joi.object({
             'number.min': 'Số lượng không được âm',
             'any.required': 'Số lượng không được để trống'
         }),
-
-    color_id: Joi.string()
-        .pattern(/^[0-9a-fA-F]{24}$/)
+          
+    color_id: Joi.array()
+        .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
+        .min(1)
         .required()
         .messages({
-            'string.pattern.base': 'Định dạng ID màu không hợp lệ',
-            'string.empty': 'ID màu không được để trống'
-        }),
-
-    sku: Joi.string()
+            'array.min': 'Phải chọn ít nhất một màu',
+            'array.base': 'Colors phải là một mảng',
+            'any.required': 'Colors không được để trống',
+            'string.pattern.base': 'Định dạng ID màu không hợp lệ'
+        }),    sku: Joi.string()
         .required()
         .trim()
+        .min(3)
+        .max(50)
+        .pattern(/^[A-Za-z0-9-_]+$/)
         .messages({
-            'string.empty': 'SKU không được để trống'
+            'string.empty': 'SKU không được để trống',
+            'string.min': 'SKU phải có ít nhất 3 ký tự',
+            'string.max': 'SKU không được vượt quá 50 ký tự',
+            'string.pattern.base': 'SKU chỉ được chứa chữ cái, số, dấu gạch ngang và gạch dưới',
+            'any.required': 'SKU là trường bắt buộc'
         }),
 
     price: Joi.number()

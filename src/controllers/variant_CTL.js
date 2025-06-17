@@ -20,16 +20,6 @@ const validateSizes = async (sizes, productId) => {
     }
 };
 
-// Helper function để kiểm tra trùng lặp SKU
-const checkDuplicateSKU = async (SKU, variantId = null) => {
-    const query = { sku: SKU };
-    if (variantId) {
-        query._id = { $ne: variantId };
-    }
-    const existingVariant = await Variant.findOne(query);
-    return existingVariant !== null;
-};
-
 // Helper function để kiểm tra trùng lặp màu sắc trong cùng sản phẩm
 const checkDuplicateColor = async (colorId, productId, variantId = null) => {
     const query = {
@@ -43,29 +33,29 @@ const checkDuplicateColor = async (colorId, productId, variantId = null) => {
     return existingVariant !== null;
 };
 
+// Helper function để kiểm tra trùng lặp SKU
+const checkDuplicateSKU = async (sku, excludeVariantId = null) => {
+    const query = { sku: sku.trim() };
+    if (excludeVariantId) {
+        query._id = { $ne: excludeVariantId };
+    }
+    const existingVariant = await Variant.findOne(query);
+    return existingVariant !== null;
+};
+
 // Create a new variant
 export const createVariant = async (req, res) => {    
     try {
-        // Kiểm tra SKU trùng lặp
-        if (await checkDuplicateSKU(req.body.sku)) {
-            return res.status(400).json({
-                message: "SKU đã tồn tại trong hệ thống"
-            });
-        }
-
-        // Kiểm tra màu sắc trùng lặp trong cùng sản phẩm
-        if (await checkDuplicateColor(req.body.color_id, req.body.product_id)) {
-            return res.status(400).json({
-                message: "Màu sắc này đã được sử dụng cho một biến thể khác của sản phẩm này"
-            });
-        }
-
         // Kiểm tra tính hợp lệ của các size
         await validateSizes(req.body.sizes, req.body.product_id);
 
-        const variant = await Variant.create(req.body);
+        // Create variant
+        const variant = await Variant.create({
+            ...req.body,
+            sku: req.body.sku.trim()
+        });
+
         const populatedVariant = await Variant.findById(variant._id)
-            .populate('product_id')
             .populate('sizes')
             .populate('color_id');
 
@@ -74,8 +64,9 @@ export const createVariant = async (req, res) => {
             variant: populatedVariant
         });
     } catch (error) {
+        console.error('Lỗi khi tạo biến thể:', error);
         return res.status(400).json({
-            message: error.message
+            message: error.message || "Lỗi khi tạo biến thể"
         });
     }
 };
@@ -125,7 +116,8 @@ export const getVariantById = async (req, res) => {
 // Update variant
 export const updateVariant = async (req, res) => {
     try {
-        const existingVariant = await Variant.findById(req.params.id);
+        const variantId = req.params.id;
+        const existingVariant = await Variant.findById(variantId);
         if (!existingVariant) {
             return res.status(404).json({
                 message: "Không tìm thấy biến thể"
@@ -133,17 +125,19 @@ export const updateVariant = async (req, res) => {
         }
 
         // Kiểm tra SKU trùng lặp nếu SKU thay đổi
-        if (req.body.sku && req.body.sku !== existingVariant.sku) {
-            if (await checkDuplicateSKU(req.body.sku, req.params.id)) {
+        if (req.body.sku) {
+            // Kiểm tra SKU trùng lặp (loại trừ variant hiện tại)
+            if (await checkDuplicateSKU(req.body.sku, variantId)) {
                 return res.status(400).json({
                     message: "SKU đã tồn tại trong hệ thống"
                 });
             }
+            req.body.sku = req.body.sku.trim();
         }
 
         // Kiểm tra màu sắc trùng lặp nếu màu sắc thay đổi
         if (req.body.color_id && req.body.color_id !== existingVariant.color_id.toString()) {
-            if (await checkDuplicateColor(req.body.color_id, existingVariant.product_id, req.params.id)) {
+            if (await checkDuplicateColor(req.body.color_id, existingVariant.product_id, variantId)) {
                 return res.status(400).json({
                     message: "Màu sắc này đã được sử dụng cho một biến thể khác của sản phẩm này"
                 });
@@ -156,7 +150,7 @@ export const updateVariant = async (req, res) => {
         }
 
         const variant = await Variant.findByIdAndUpdate(
-            req.params.id,
+            variantId,
             req.body,
             { new: true }
         )
@@ -169,8 +163,9 @@ export const updateVariant = async (req, res) => {
             variant
         });
     } catch (error) {
+        console.error('Lỗi khi cập nhật biến thể:', error);
         return res.status(400).json({
-            message: error.message
+            message: error.message || "Lỗi khi cập nhật biến thể"
         });
     }
 };

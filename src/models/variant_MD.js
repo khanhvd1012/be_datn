@@ -25,7 +25,7 @@ const variantSchema = new mongoose.Schema({
     },
     sku: {
         type: String,
-        required: true,
+        required: [true, 'SKU là bắt buộc'],
         unique: true,
         trim: true
     },
@@ -44,8 +44,8 @@ const variantSchema = new mongoose.Schema({
         default: 'active'
     }
 
-},{ timestamps: true });
+}, { timestamps: true });
 
 variantSchema.pre('save', updateProductOnVariantSave);
 
-export default mongoose.model('Variants', variantSchema);
+export default mongoose.models.Variants || mongoose.model("Variants", variantSchema);

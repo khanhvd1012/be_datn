@@ -27,9 +27,7 @@ const sizeSchema = new mongoose.Schema({
         default: 'active'
     }
 }, {
-    timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+    timestamps: true
 });
 
 export default mongoose.model('Sizes', sizeSchema);
