@@ -39,6 +39,14 @@ const variantSchema = Joi.object({
             'number.empty': 'Giá bán không được để trống'
         }),
 
+    gender: Joi.string()
+        .valid('unisex', 'male', 'female')
+        .required()
+        .messages({
+            'any.only': 'Giới tính phải là unisex, nam hoặc nữ',
+            'string.empty': 'Giới tính không được để trống'
+        }),
+
     import_price: Joi.number()
         .min(0)
         .max(Joi.ref('price'))
@@ -48,6 +56,21 @@ const variantSchema = Joi.object({
             'number.min': 'Giá nhập không được âm',
             'number.max': 'Giá nhập không được cao hơn giá bán',
             'number.empty': 'Giá nhập không được để trống'
+        }),
+
+    initial_stock: Joi.number()
+        .min(0)
+        .optional()
+        .messages({
+            'number.base': 'Số lượng nhập kho ban đầu phải là số',
+            'number.min': 'Số lượng nhập kho ban đầu không được âm'
+        }),
+
+    status: Joi.string()
+        .valid('inStock', 'outOfStock')
+        .default('inStock')
+        .messages({
+            'any.only': 'Trạng thái phải là inStock hoặc outOfStock'
         })
 });
 

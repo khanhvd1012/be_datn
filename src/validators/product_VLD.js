@@ -32,40 +32,17 @@ const productSchema = Joi.object({
             'string.pattern.base': 'Định dạng ID danh mục không hợp lệ',
             'string.empty': 'ID danh mục không được để trống'
         }),
-
-    gender: Joi.string()
-        .valid('unisex', 'male', 'female')
-        .required()
-        .messages({
-            'any.only': 'Giới tính phải là unisex, nam hoặc nữ',
-            'string.empty': 'Giới tính không được để trống'
-        }),
-        
     variants: Joi.array()
         .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
         .messages({
             'string.pattern.base': 'Định dạng ID biến thể không hợp lệ'
         }),
 
-    images: Joi.array()
-        .items(Joi.string().uri())
+    image: Joi.string()
+        .uri()
         .messages({
             'string.uri': 'URL hình ảnh không hợp lệ'
-        }),
-
-    price: Joi.number()
-        .min(0)
-        .required()
-        .messages({
-            'number.base': 'Giá phải là một số',
-            'number.min': 'Giá không được âm',
-            'any.required': 'Giá không được để trống'
-        }), status: Joi.string()
-            .valid('inStock', 'outOfStock')
-            .default('inStock')
-            .messages({
-                'any.only': 'Trạng thái phải là inStock hoặc outOfStock'
-            })
+        })
 });
 
 import Product from "../models/product_MD.js";

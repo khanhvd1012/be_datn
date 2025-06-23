@@ -1,176 +1,295 @@
 import variant_MD from "../models/variant_MD";
-import stock_MD from "../models/stock_MD";
-import stockHistory_MD from "../models/stockHistory_MD";
 import product_MD from "../models/product_MD";
+import Stock from "../models/stock_MD";
+import StockHistory from "../models/stockHistory_MD";
+
+/**
+ * Hàm tạo SKU cho variant
+ * @param {Object} product - Thông tin sản phẩm
+ * @param {Object} variant - Thông tin biến thể
+ * @returns {String} Mã SKU mới
+ * 
+ * Format SKU: XXX-CCC-SS-TTTT
+ * - XXX: 3 ký tự đầu của tên sản phẩm
+ * - CCC: 3 ký tự đầu của màu sắc
+ * - SS: Kích thước
+ * - TTTT: 4 số cuối của timestamp
+ * 
+ * Ví dụ: NIK-BLA-42-1234 (Nike-Black-42-1234)
+ */
+
+const generateSKU = (product, variant) => {
+    const productName = product.name.substring(0, 3).toUpperCase();
+    const color = variant.color.substring(0, 3).toUpperCase();
+    const size = variant.size.toString();
+    const timestamp = Date.now().toString().slice(-4);
+    return `${productName}-${color}-${size}-${timestamp}`;
+};
+
 export const createVariant = async (req, res) => {
     try {
-        // Tạo biến thể mới 
+        // Kiểm tra sản phẩm tồn tại
         const product = await product_MD.findById(req.body.product_id);
         if (!product) {
             return res.status(404).json({ message: 'Sản phẩm không tồn tại' });
         }
-        const Variant = await variant_MD.create(req.body);
-        res.status(201).json({
-            message: 'Variant created successfully',
-            data: Variant
+        // kiểm tra trùng lặp biến thể
+        const existingVariant = await variant_MD.findOne({
+            product_id: req.body.product_id,
+            color: req.body.color,
+            size: req.body.size
         });
-
-        // Tạo bản ghi tồn kho ban đầu
-        const stock = await stock_MD.create({
-            product_variant_id: Variant._id,
-            quantity: req.body.initial_stock || 0
-        });
-
-        // Ghi lại lịch sử nếu có số lượng ban đầu
-        if (req.body.initial_stock) {
-            await stockHistory_MD.create({
-                stock_id: stock._id,
-                quantity: req.body.initial_stock,
-                reason: 'Số lượng ban đầu',
-            })
+        if (existingVariant) {
+            return res.status(400).json({ message: 'Biến thể đã tồn tại' });
         }
+
+        // Kiểm tra giá nhập không được cao hơn giá bán
+        if (req.body.import_price > req.body.price) {
+            return res.status(400).json({
+                message: 'Giá nhập không được cao hơn giá bán'
+            });
+        }
+
+        // Tạo SKU cho variant mới
+        const sku = generateSKU(product, {
+            color: req.body.color,
+            size: req.body.size
+        });
+
+        // Tạo biến thể mới
+        const variant = await variant_MD.create({
+            product_id: req.body.product_id,
+            color: req.body.color,
+            size: req.body.size,
+            price: req.body.price,
+            gender: req.body.gender,
+            image_url: req.body.image_url,
+            import_price: req.body.import_price,
+            status: 'inStock', // Mặc định là có hàng
+            sku: sku // Thêm SKU vào variant
+        });
+
+        // Cập nhật danh sách variants trong product
+        await product_MD.findByIdAndUpdate(
+            req.body.product_id,
+            { $push: { variants: variant._id } }
+        );
+
+        // Nếu có initial_stock, tạo stock record và lịch sử
+        if (req.body.initial_stock && req.body.initial_stock > 0) {
+            const stock = await Stock.create({
+                product_variant_id: variant._id,
+                quantity: req.body.initial_stock
+            });
+
+            await StockHistory.create({
+                stock_id: stock._id,
+                quantity_change: req.body.initial_stock,
+                reason: 'Nhập kho ban đầu'
+            });
+
+            return res.status(201).json({
+                message: 'Tạo biến thể và nhập kho thành công',
+                data: {
+                    variant,
+                    stock: {
+                        quantity: stock.quantity,
+                        status: variant.status
+                    }
+                }
+            });
+        }
+
         return res.status(201).json({
-            message: 'Biến thể đã được tạo thành công',
-            data: Variant
+            message: 'Tạo biến thể thành công',
+            data: variant
         });
     } catch (error) {
-        console.error(error);
+        console.error('Lỗi khi tạo biến thể:', error);
         return res.status(500).json({
             message: 'Đã xảy ra lỗi khi tạo biến thể',
             error: error.message
         });
     }
 };
+
 export const updateVariant = async (req, res) => {
     try {
-        const variantId = await variant_MD.findByIdAndUpdate(req.params.id, req.body, { new: true });
-
-        if (!variantId) {
-            return res.status(404).json({ message: 'Biến thể không tồn tại' });
+        // Kiểm tra giá nhập không được cao hơn giá bán
+        if (req.body.import_price && req.body.price &&
+            req.body.import_price > req.body.price) {
+            return res.status(400).json({
+                message: 'Giá nhập không được cao hơn giá bán'
+            });
         }
 
+        // Tìm variant hiện tại
+        const currentVariant = await variant_MD.findById(req.params.id);
+        if (!currentVariant) {
+            return res.status(404).json({ message: 'Không tìm thấy biến thể' });
+        }
+
+        // Nếu có thay đổi màu sắc hoặc kích thước, cần tạo SKU mới
+        if (req.body.color || req.body.size) {
+            // Lấy thông tin sản phẩm
+            const product = await product_MD.findById(currentVariant.product_id);
+            if (!product) {
+                return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+            }
+
+            // Kiểm tra trùng lặp biến thể
+            const existingVariant = await variant_MD.findOne({
+                product_id: currentVariant.product_id,
+                color: req.body.color || currentVariant.color,
+                size: req.body.size || currentVariant.size,
+                _id: { $ne: currentVariant._id } // Loại trừ variant hiện tại
+            });
+
+            if (existingVariant) {
+                return res.status(400).json({ message: 'Biến thể với màu sắc và kích thước này đã tồn tại' });
+            }
+
+            // Tạo SKU mới
+            const newVariant = {
+                ...currentVariant.toObject(),
+                ...req.body,
+                sku: generateSKU(product, {
+                    color: req.body.color || currentVariant.color,
+                    size: req.body.size || currentVariant.size
+                })
+            };
+
+            // Cập nhật variant với SKU mới
+            const updatedVariant = await variant_MD.findByIdAndUpdate(
+                req.params.id,
+                newVariant,
+                { new: true }
+            );
+
+            return res.status(200).json({
+                message: 'Cập nhật biến thể thành công',
+                data: updatedVariant
+            });
+        }
+
+        // Nếu không thay đổi màu sắc hoặc kích thước, chỉ cập nhật các thông tin khác
+        const updatedVariant = await variant_MD.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true }
+        );
+
         return res.status(200).json({
-            message: 'Biến thể đã được cập nhật thành công',
-            data: variantId
+            message: 'Cập nhật biến thể thành công',
+            data: updatedVariant
         });
     } catch (error) {
-        console.error(error);
+        console.error('Lỗi khi cập nhật biến thể:', error);
         return res.status(500).json({
             message: 'Đã xảy ra lỗi khi cập nhật biến thể',
             error: error.message
         });
     }
-}
+};
 
 export const getAllVariants = async (req, res) => {
     try {
-        const variant = await variant_MD.find().populate('product_id');
+        const { hideOutOfStock } = req.query;
+        let query = {};
+        
+        // Nếu hideOutOfStock=true, chỉ lấy các variant còn hàng
+        if (hideOutOfStock === 'true') {
+            query.status = 'inStock';
+        }
 
-        // Thêm thông tin kho cho từng biến thể
-        const variantsWithStock = await Promise.all(variant.map(async (item) => {
-            const stock = await stock_MD.findOne({ product_variant_id: item._id });
-            return {
-                ...item.toObject(),
-                stock: stock ? stock.quantity : 0
-            };
-        }));
+        const variants = await variant_MD.find(query).populate('product_id');
+
+        // Lấy thông tin stock cho mỗi variant
+        const variantsWithStock = await Promise.all(
+            variants.map(async (variant) => {
+                const stock = await Stock.findOne({ product_variant_id: variant._id });
+                return {
+                    ...variant.toObject(),
+                    stock: {
+                        quantity: stock ? stock.quantity : 0,
+                        status: variant.status
+                    }
+                };
+            })
+        );
 
         return res.status(200).json({
             message: 'Lấy danh sách biến thể thành công',
             data: variantsWithStock
         });
     } catch (error) {
-        console.error(error);
+        console.error('Lỗi khi lấy danh sách biến thể:', error);
         return res.status(500).json({
             message: 'Đã xảy ra lỗi khi lấy danh sách biến thể',
             error: error.message
         });
     }
-}
+};
 
 export const getVariantById = async (req, res) => {
     try {
-        // Tìm biến thể theo ID và populate các sản phẩm liên quan
-        const variant = await variant_MD.findById(req.params.id).populate('product_id');
+        const variant = await variant_MD.findById(req.params.id)
+            .populate('product_id');
+
         if (!variant) {
-            return res.status(404).json({ message: 'Biến thể không tồn tại' });
+            return res.status(404).json({ message: 'Không tìm thấy biến thể' });
         }
-        // Lấy thông tin kho cho biến thể
-        // Nếu không có kho, trả về số lượng là 0
-        const stock = await stock_MD.findOne({ product_variant_id: variant._id });
+
+        // Lấy thông tin stock
+        const stock = await Stock.findOne({ product_variant_id: variant._id });
+
         return res.status(200).json({
-            message: 'Lấy biến thể thành công',
+            message: 'Lấy thông tin biến thể thành công',
             data: {
                 ...variant.toObject(),
                 stock: stock ? stock.quantity : 0
             }
         });
     } catch (error) {
-        console.error(error);
+        console.error('Lỗi khi lấy thông tin biến thể:', error);
         return res.status(500).json({
-            message: 'Đã xảy ra lỗi khi lấy biến thể',
+            message: 'Đã xảy ra lỗi khi lấy thông tin biến thể',
             error: error.message
         });
     }
-}
+};
 
 export const deleteVariant = async (req, res) => {
     try {
-        const variant = await variant_MD.findByIdAndDelete(req.params.id);
+        const variant = await variant_MD.findById(req.params.id);
         if (!variant) {
-            return res.status(404).json({ message: 'Biến thể không tồn tại' });
+            return res.status(404).json({ message: 'Không tìm thấy biến thể' });
         }
 
-        // Xóa các bản ghi liên quan trong kho và lịch sử kho nếu cần
-        const stock = await stock_MD.findOneAndDelete({ product_variant_id: variant._id });
+        // Xóa variant khỏi danh sách variants trong product
+        await product_MD.findByIdAndUpdate(
+            variant.product_id,
+            { $pull: { variants: variant._id } }
+        );
+
+        // Xóa stock và stock history liên quan
+        const stock = await Stock.findOne({ product_variant_id: variant._id });
         if (stock) {
-            await stockHistory_MD.deleteMany({ stock_id: stock._id });
-            await stock.remove();
+            await StockHistory.deleteMany({ stock_id: stock._id });
+            await Stock.deleteOne({ _id: stock._id });
         }
-        return res.status(200).json({ message: 'Biến thể đã được xóa thành công' });
+
+        // Xóa variant
+        await variant_MD.deleteOne({ _id: variant._id });
+
+        return res.status(200).json({
+            message: 'Xóa biến thể thành công'
+        });
     } catch (error) {
-        console.error(error);
+        console.error('Lỗi khi xóa biến thể:', error);
         return res.status(500).json({
             message: 'Đã xảy ra lỗi khi xóa biến thể',
             error: error.message
         });
     }
-}
-
-export const updateStock = async (req, res) => {
-    try {
-        // Kiểm tra dữ liệu đầu vào
-        const { quantity_change, reason } = req.body;
-        const stock = await stock_MD.findOne({ product_variant_id: req.params.id });
-        if (!stock) {
-            return res.status(404).json({ message: 'Biến thể không tồn tại trong kho' });
-        }
-
-        // Kiểm tra số lượng tồn kho sau khi thay đổi
-        if (stock.quantity + quantity_change < 0) {
-            return res.status(400).json({ message: 'Số lượng kho không đủ để thực hiện thay đổi' });
-        }
-        // Cập nhật số lượng tồn kho
-        stock.quantity += quantity_change;
-        stock.last_updated = new Date();
-        await stock.save();
-
-        // Ghi lại lịch sử tồn kho
-        await stockHistory_MD.create({
-            stock_id: stock._id,
-            quantity_change,
-            reason: reason || 'Cập nhật tồn kho'
-        });
-
-        return res.status(200).json({
-            message: 'Cập nhật tồn kho thành công',
-            data: stock
-        });
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({
-            message: 'Đã xảy ra lỗi khi cập nhật tồn kho',
-            error: error.message
-        });
-    }
-}
+};

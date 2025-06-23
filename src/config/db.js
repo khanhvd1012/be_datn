@@ -1,36 +1,42 @@
-/**
- * Module kết nối MongoDB
- * @param {string} dbUrl - URL kết nối MongoDB, ví dụ: mongodb://localhost:27017/database_name
- */
 import mongoose from "mongoose";
+
+let isConnected = false;
+let listenersAttached = false;
 
 export default async function connectDB(dbUrl) {
     try {
-        // Kiểm tra xem có URL kết nối không
         if (!dbUrl) {
             throw new Error('MongoDB connection URL is not provided');
         }
 
-        // Thiết lập kết nối với các tùy chọn:
+        // Tránh kết nối lại nếu đã kết nối rồi
+        if (isConnected) {
+            return;
+        }
+
         await mongoose.connect(dbUrl, {
-            maxPoolSize: 10,        // Số lượng kết nối tối đa trong pool
-            serverSelectionTimeoutMS: 5000,  // Thời gian chờ kết nối tối đa (5 giây)
-            socketTimeoutMS: 45000,  // Thời gian timeout cho mỗi operation (45 giây)
+            maxPoolSize: 10,
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000,
         });
 
-        // Lắng nghe sự kiện lỗi kết nối
-        mongoose.connection.on('error', (err) => {
-            console.error('MongoDB connection error:', err);
-        });
+        isConnected = true;
 
-        // Lắng nghe sự kiện mất kết nối
-        mongoose.connection.on('disconnected', () => {
-            console.warn('MongoDB disconnected');
-        });
+        // Gắn listener chỉ một lần duy nhất
+        if (!listenersAttached) {
+            mongoose.connection.on('error', (err) => {
+                console.error('MongoDB connection error:', err);
+            });
+
+            mongoose.connection.on('disconnected', () => {
+                console.warn('MongoDB disconnected');
+            });
+
+            listenersAttached = true;
+        }
 
         console.log("MongoDB connected successfully");
     } catch (error) {
-        // Xử lý lỗi kết nối và ném ra ngoài để xử lý ở tầng cao hơn
         console.error("MongoDB connection failed:", error);
         throw error;
     }

@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { updateVoucherOnSave } from "../middleware/voucher_MID";
+import { updateVoucherOnSave } from "../middleware/voucher_MID.js";
 
 const voucherSchema = new mongoose.Schema({
     code: { 

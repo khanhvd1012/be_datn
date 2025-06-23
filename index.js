@@ -14,7 +14,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api', router);
 
 // Add basic health check
-app.get('/start', (req, res) => {
+app.get('/', (req, res) => {
     res.json({ status: 'ok' });
 });
 

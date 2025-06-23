@@ -44,6 +44,21 @@ const stockSchema = Joi.object({
         })
 });
 
+const stockUpdateSchema = Joi.object({
+    quantity_change: Joi.number()
+        .required()
+        .messages({
+            'number.base': 'Số lượng thay đổi phải là số',
+            'any.required': 'Số lượng thay đổi là bắt buộc'
+        }),
+    reason: Joi.string()
+        .required()
+        .messages({
+            'string.empty': 'Lý do không được để trống',
+            'any.required': 'Lý do là bắt buộc'
+        })
+});
+
 export const validateStock = (req, res, next) => {
     const { error } = stockSchema.validate(req.body, { abortEarly: false });
     
@@ -55,5 +70,19 @@ export const validateStock = (req, res, next) => {
         return res.status(400).json({ errors });
     }
     
+    next();
+};
+
+export const validateStockUpdate = (req, res, next) => {
+    const { error } = stockUpdateSchema.validate(req.body, { abortEarly: false });
+
+    if (error) {
+        const errors = error.details.map(detail => ({
+            field: detail.context.key,
+            message: detail.message
+        }));
+        return res.status(400).json({ errors });
+    }
+
     next();
 };

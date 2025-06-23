@@ -5,10 +5,10 @@ import { createOrder, getOrders, getOrderById, updateOrderStatus, cancelOrder } 
 const orderRouter = Router();
 
 // All order routes require authentication
-orderRouter.post("/create", authMiddleware, createOrder);
+orderRouter.post("/", authMiddleware, createOrder);
 orderRouter.get("/", authMiddleware, getOrders);
 orderRouter.get("/:id", authMiddleware, getOrderById);
-orderRouter.put("/:id/status", authMiddleware, updateOrderStatus);
+orderRouter.put("/:id", authMiddleware, updateOrderStatus);
 orderRouter.put("/:id/cancel", authMiddleware, cancelOrder);
 
 export default orderRouter;
