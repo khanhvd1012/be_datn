@@ -1,29 +1,17 @@
-import { Router } from 'express';
-import {
-    getAllNotifications,
-    getLowStockNotifications,
-    markAsRead,
-    markAllAsRead,
-    deleteNotification,
-    deleteAllRead
-} from '../controllers/notification_CTL';
-import authMiddleware from '../middleware/auth_MID';
-import checkRole from '../middleware/checkRole_MID';
-import { ROLES } from '../config/roles';
+import { Router } from "express";
+import { getRoles, updateUserRole, getUsersByRole } from "../controllers/role_CTL";
+import authMiddleware from "../middleware/auth_MID";
+import checkRole from "../middleware/checkRole_MID";
+import { ROLES } from "../config/roles";
 
-const notificationRouter = Router();
+const roleRouter = Router();
+// Lấy danh sách vai trò và quyền (chỉ Admin mới có quyền)
+roleRouter.get("/", authMiddleware, checkRole(ROLES.ADMIN), getRoles);
 
-// Middleware xác thực cho tất cả routes
-notificationRouter.use(authMiddleware);
+// Cập nhật vai trò cho người dùng (chỉ Admin mới có quyền)
+roleRouter.put("/update-user-role", authMiddleware, checkRole(ROLES.ADMIN), updateUserRole);
 
-// Routes cho tất cả users
-notificationRouter.get('/', getAllNotifications);
-notificationRouter.put('/:id/read', markAsRead);
-notificationRouter.put('/read-all', markAllAsRead);
-notificationRouter.delete('/:id', deleteNotification);
-notificationRouter.delete('/read/all', deleteAllRead);
+// Lấy danh sách người dùng theo vai trò (Admin và Employee có quyền)
+roleRouter.get("/users/:role", authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), getUsersByRole);
 
-// Routes cho admin và employee
-notificationRouter.get('/low-stock', checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), getLowStockNotifications);
-
-export default notificationRouter; 
+export default roleRouter; 
