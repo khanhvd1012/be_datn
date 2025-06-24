@@ -1,16 +1,17 @@
-import express from 'express';
+import { Router } from 'express';
 import { getAll, getById, create, update, remove } from '../controllers/color_CTL.js';
-import checkPermission from '../middleware/auth_MID.js';
+import authMiddleware from '../middleware/auth_MID.js';
+import { validateColor } from '../validators/color_VLD.js';
 
-const router = express.Router();
+const colorRouter = Router();
 
 // Public routes
-router.get('/', getAll);
-router.get('/:id', getById);
+colorRouter.get('/', authMiddleware, getAll);
+colorRouter.get('/:id', authMiddleware, getById);
 
 // Protected routes (Admin only)
-router.post('/', checkPermission, create);
-router.put('/:id', checkPermission, update);
-router.delete('/:id', checkPermission, remove);
+colorRouter.post('/', authMiddleware, validateColor, create);
+colorRouter.put('/:id', authMiddleware, validateColor, update);
+colorRouter.delete('/:id', authMiddleware, remove);
 
-export default router;
+export default colorRouter;

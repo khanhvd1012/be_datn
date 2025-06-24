@@ -1,6 +1,7 @@
 import Joi from 'joi';
+import Color from '../models/color_MD.js';
 
-const colorValidator = Joi.object({
+const colorSchema = Joi.object({
     name: Joi.string()
         .required()
         .trim()
@@ -31,4 +32,50 @@ const colorValidator = Joi.object({
         })
 });
 
-export default colorValidator;
+export const validateColor = async (req, res, next) => {
+    try {
+        // Validate schema
+        const { error } = colorSchema.validate(req.body, { abortEarly: false });
+        if (error) {
+            const errors = error.details.map(detail => ({
+                field: detail.context.key,
+                message: detail.message
+            }));
+            return res.status(400).json({ errors });
+        }
+
+        // Check duplicate name
+        const existingColorByName = await Color.findOne({
+            name: req.body.name,
+            _id: { $ne: req.params.id } // exclude when updating
+        });
+        if (existingColorByName) {
+            return res.status(400).json({
+                errors: [{
+                    field: 'name',
+                    message: 'Tên màu sắc đã tồn tại'
+                }]
+            });
+        }
+
+        // Check duplicate code
+        const existingColorByCode = await Color.findOne({
+            code: req.body.code,
+            _id: { $ne: req.params.id }
+        });
+        if (existingColorByCode) {
+            return res.status(400).json({
+                errors: [{
+                    field: 'code',
+                    message: 'Mã màu đã tồn tại'
+                }]
+            });
+        }
+
+        next();
+    } catch (err) {
+        next(err);
+    }
+};
+
+export default { validateColor };

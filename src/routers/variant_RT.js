@@ -1,10 +1,8 @@
 import { Router } from "express";
-import mongoose from "mongoose";
-import { createVariant, deleteVariant, getAllVariants, getVariantById, updateStock, updateVariant } from "../controllers/variant_CTL";
+import { createVariant, deleteVariant, getAllVariants, getVariantById, updateVariant } from "../controllers/variant_CTL";
 import { validateVariant } from "../validators/variant_VLD";
 import authMiddleware from "../middleware/auth_MID";
-import { checkDuplicateSKU, checkDuplicateColor } from "../middleware/variant_MID";
-
+// import { checkDuplicateVariant } from "../middleware/variant_MID";
 
 const variantRouter = Router();
 
@@ -13,9 +11,8 @@ variantRouter.get("/", getAllVariants);
 variantRouter.get("/:id", getVariantById);
 
 // Protected routes (require authentication)
-variantRouter.post("/create", authMiddleware, validateVariant, checkDuplicateSKU, checkDuplicateColor, createVariant);
-variantRouter.put("/:id", authMiddleware, validateVariant, checkDuplicateSKU, checkDuplicateColor, updateVariant);
+variantRouter.post("/", authMiddleware, validateVariant, createVariant);
+variantRouter.put("/:id", authMiddleware, validateVariant, updateVariant);
 variantRouter.delete("/:id", authMiddleware, deleteVariant);
-variantRouter.put("/:id/stock", updateStock);
 
 export default variantRouter;

@@ -2,74 +2,75 @@ import Joi from "joi";
 
 
 const variantSchema = Joi.object({
-    sizes: Joi.array()
-        .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
-        .min(1)
+    product_id: Joi.string()
+        .pattern(/^[0-9a-fA-F]{24}$/)
         .required()
         .messages({
-            'array.min': 'Phải chọn ít nhất một size',
-            'array.base': 'Sizes phải là một mảng',
-            'any.required': 'Sizes không được để trống',
-            'string.pattern.base': 'Định dạng ID size không hợp lệ'
+            'string.pattern.base': 'Định dạng ID sản phẩm không hợp lệ',
+            'string.empty': 'ID sản phẩm không được để trống'
         }),
 
-    quantity: Joi.number()
-        .min(0)
+    color: Joi.string()
         .required()
         .messages({
-            'number.base': 'Số lượng phải là số',
-            'number.min': 'Số lượng không được âm',
-            'any.required': 'Số lượng không được để trống'
+            'string.empty': 'Màu sắc không được để trống'
         }),
-          
-    color_id: Joi.array()
-        .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
-        .min(1)
+
+    size: Joi.string()
         .required()
         .messages({
-            'array.min': 'Phải chọn ít nhất một màu',
-            'array.base': 'Colors phải là một mảng',
-            'any.required': 'Colors không được để trống',
-            'string.pattern.base': 'Định dạng ID màu không hợp lệ'
-        }),    sku: Joi.string()
+            'string.empty': 'Kích thước không được để trống'
+        }),
+
+    image_url: Joi.string()
+        .uri()
         .required()
-        .trim()
-        .min(3)
-        .max(50)
-        .pattern(/^[A-Za-z0-9-_]+$/)
         .messages({
-            'string.empty': 'SKU không được để trống',
-            'string.min': 'SKU phải có ít nhất 3 ký tự',
-            'string.max': 'SKU không được vượt quá 50 ký tự',
-            'string.pattern.base': 'SKU chỉ được chứa chữ cái, số, dấu gạch ngang và gạch dưới',
-            'any.required': 'SKU là trường bắt buộc'
+            'string.uri': 'Định dạng URL ảnh không hợp lệ',
+            'string.empty': 'URL ảnh không được để trống'
         }),
 
     price: Joi.number()
         .min(0)
         .required()
         .messages({
-            'number.base': 'Giá phải là số',
-            'number.min': 'Giá không được âm',
-            'any.required': 'Giá không được để trống'
+            'number.base': 'Giá bán phải là số',
+            'number.min': 'Giá bán không được âm',
+            'number.empty': 'Giá bán không được để trống'
         }),
 
-    images: Joi.array()
-        .items(Joi.string().uri())
-        .min(1)
+    gender: Joi.string()
+        .valid('unisex', 'male', 'female')
         .required()
         .messages({
-            'array.min': 'Phải có ít nhất một hình ảnh',
-            'array.base': 'Images phải là một mảng',
-            'string.uri': 'URL hình ảnh không hợp lệ',
-            'any.required': 'Images không được để trống'
+            'any.only': 'Giới tính phải là unisex, nam hoặc nữ',
+            'string.empty': 'Giới tính không được để trống'
+        }),
+
+    import_price: Joi.number()
+        .min(0)
+        .max(Joi.ref('price'))
+        .required()
+        .messages({
+            'number.base': 'Giá nhập phải là số',
+            'number.min': 'Giá nhập không được âm',
+            'number.max': 'Giá nhập không được cao hơn giá bán',
+            'number.empty': 'Giá nhập không được để trống'
+        }),
+
+    initial_stock: Joi.number()
+        .min(0)
+        .optional()
+        .messages({
+            'number.base': 'Số lượng nhập kho ban đầu phải là số',
+            'number.min': 'Số lượng nhập kho ban đầu không được âm'
         }),
 
     status: Joi.string()
-        .valid('active', 'inactive')
-        .default('active')
+        .valid('inStock', 'outOfStock')
+        .default('inStock')
         .messages({
-            'any.only': 'Trạng thái phải là active hoặc inactive'
+            'any.only': 'Trạng thái phải là inStock hoặc outOfStock'
         })
 });
 

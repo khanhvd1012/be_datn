@@ -1,5 +1,6 @@
 import review_MD from "../models/review_MD"
 
+// lấy đánh giá sản phẩm
 export const getProductReviews = async (req, res) => {
     try {
         const reviews = await review_MD.find({ product_id: req.params.product_id })
@@ -16,6 +17,7 @@ export const getProductReviews = async (req, res) => {
     }
 }
 
+// tạo đánh giá sản phẩm
 export const createReview = async (req, res) => {
     try {
         const { user_id, product_id, rating, comment } = req.body
@@ -39,6 +41,7 @@ export const createReview = async (req, res) => {
     }
 }
 
+// cập nhật đánh giá sản phẩm
 export const updateReview = async (req, res) => {
     try {
         const review = await review_MD.findByIdAndUpdate({
@@ -66,6 +69,7 @@ export const updateReview = async (req, res) => {
     }
 }
 
+// xóa đánh giá sản phẩm
 export const deleteReview = async (req, res) => {
     try {
         const review = await review_MD.findByIdAndDelete({

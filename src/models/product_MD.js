@@ -1,6 +1,21 @@
-import mongoose from "mongoose";
+import mongoose from "mongoose"
 import mongoosePaginate from 'mongoose-paginate-v2';
 
+/**
+ * Schema định nghĩa cấu trúc của một sản phẩm
+ * @description
+ * Các trường thông tin:
+ * - name: Tên sản phẩm (bắt buộc)
+ * - description: Mô tả sản phẩm
+ * - brand: Thương hiệu (reference đến collection Brands)
+ * - category: Danh mục (reference đến collection Categories)
+ * - variants: Danh sách các biến thể (reference đến collection Variants)
+ * - images: Danh sách hình ảnh
+ * 
+ * Tính năng:
+ * - Tự động tạo createdAt, updatedAt
+ * - Hỗ trợ phân trang với mongoose-paginate-v2
+ */
 const productSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -11,44 +26,22 @@ const productSchema = new mongoose.Schema({
     },
     brand: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Brand"
+        ref: "Brands"
     },
     category: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Categories"
     },
-    gender: {
-        type: String,
-        enum: ['unisex', 'male', 'female']
-    },
-    sizes: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Sizes"
-    }],    
-    colors: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Colors',
-        required: true   
-    },
-    images: [{
-        type: String
-    }],
-    price: {
-        type: Number,
-        required: true,
-        min: 0
-    },
-    status: {
-        type: String,
-        enum: ['inStock', 'outOfStock'],
-        default: 'inStock'
-    },
     variants: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "Variants"
     }],
+    images: [{
+        type: String
+    }],
 }, { timestamps: true });
 
+// Plugin hỗ trợ phân trang
 productSchema.plugin(mongoosePaginate);
 
-export default mongoose.models.Products || mongoose.model("Products", productSchema);
+export default mongoose.model("Products", productSchema);

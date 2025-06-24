@@ -1,19 +1,19 @@
 import mongoose from "mongoose";
 
 const orderItemSchema = new mongoose.Schema({
-    product: {
+    product_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Products",
         required: true,
     },
     variant_id: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Variants",
+        ref: "Variant",
         required: true,
     },
     order_id: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Orders",
+        ref: "Order",
         required: true,
     },
     quantity: {

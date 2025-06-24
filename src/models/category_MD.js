@@ -3,19 +3,20 @@ import mongoose from "mongoose";
 const categorySchema = new mongoose.Schema({
     name: {
         type: String,
-        required: true,
+        required: true
     },
     description: {
-        type: String,
-        required: true,
+        type: String
     },
     logo_image: {
-        type: String,
-        required: true,
+        type: String
     },
     products: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Products'
-    }],
+    }]
 }, { timestamps: true });
-export default mongoose.model("Categories", categorySchema);
+
+const Categories = mongoose.models.Categories || mongoose.model('Categories', categorySchema);
+
+export default Categories;

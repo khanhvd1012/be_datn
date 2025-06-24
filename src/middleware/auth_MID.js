@@ -4,38 +4,70 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: './.env' });
 
-// Add token blacklist array
+/**
+ * Mảng lưu trữ các token đã bị vô hiệu hóa (blacklist)
+ * @description
+ * - Sử dụng để lưu trữ các token đã logout hoặc bị vô hiệu hóa
+ * - Kiểm tra token có trong blacklist trước khi xác thực
+ * - Lưu ý: Trong môi trường production nên sử dụng Redis để lưu blacklist
+ */
 const tokenBlacklist = [];
 
+/**
+ * Middleware xác thực người dùng
+ * @description
+ * Quy trình xác thực:
+ * 1. Kiểm tra token trong header Authorization
+ * 2. Kiểm tra token có trong blacklist không
+ * 3. Giải mã token và verify với secret key
+ * 4. Tìm user trong database theo userId từ token
+ * 5. Gán thông tin user vào request để sử dụng ở các middleware tiếp theo
+ * 
+ * Xử lý các trường hợp lỗi:
+ * - Token không tồn tại
+ * - Token trong blacklist
+ * - Token không hợp lệ
+ * - Token hết hạn
+ * - User không tồn tại
+ */
 const authMiddleware = async (req, res, next) => {
     try {
+        // Lấy token từ header Authorization (format: Bearer <token>)
         const token = req.headers['authorization']?.split(' ')[1];
-        // lấy token từ header tách chuỗi theo dấu cách và lấy phần tử thứ 2 trong mảng 
         if (!token) {
             return res.status(404).json({ message: "Access token not found" });
         };
 
-        // Check if token is blacklisted
+        // Kiểm tra token có trong blacklist không
         if (tokenBlacklist.includes(token)) {
             return res.status(401).json({ message: "Token đã bị vô hiệu hóa" });
         }
 
+        // Giải mã và verify token
         const decoded = jwt.verify(token, process.env.KEY_SECRET)
-        // giải mã token bằng jwt.verify và truyền vào secret key là "nghiant"
-        const user = await user_MD.findById(decoded.id).select("-password");
-        // tìm kiếm người dùng trong cơ sở dữ liệu bằng id đã giải mã từ token và loại bỏ trường password khỏi kết quả trả về
+        
+        // Tìm user trong database, loại bỏ trường password
+        const user = await user_MD.findById(decoded.userId).select("-password");
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
+
+        // Gán thông tin user vào request
         req.user = user;
-        // gán người dùng vào req.user để sử dụng trong các middleware và route tiếp theo`
         next();
-        // gọi hàm next để tiếp tục xử lý request
+
     } catch (error) {
+        // Xử lý các lỗi liên quan đến token
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ message: "Token không hợp lệ" });
+        }
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ message: "Token đã hết hạn" });
+        }
         return res.status(500).json({ message: "Internal server error" });
     }
 };
 
-// Export the tokenBlacklist array for use in other files
+// Export tokenBlacklist để sử dụng ở các file khác
 export { tokenBlacklist };
 export default authMiddleware;

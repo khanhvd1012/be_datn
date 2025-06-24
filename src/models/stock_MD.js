@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const stockSchema = new mongoose.Schema({
     product_variant_id: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Variants',
+        ref: 'Variant',
         required: true
     },
     quantity: {
@@ -15,5 +15,5 @@ const stockSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
-},{ timestamps: true })
-export default mongoose.model('Stocks', stockSchema);
+}, { timestamps: true })
+export default mongoose.model('Stock', stockSchema);
