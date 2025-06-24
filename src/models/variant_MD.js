@@ -32,16 +32,14 @@ const variantSchema = new mongoose.Schema({
         unique: true,
         trim: true
     },
-    color: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    size: {
-        type: String,
-        required: true,
-        trim: true
-    },
+    color: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Colors'
+    }],
+    size: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Sizes'
+    }],
     price: {
         type: Number,
         required: true,
@@ -62,7 +60,7 @@ const variantSchema = new mongoose.Schema({
         enum: ['inStock', 'outOfStock'],
         default: 'inStock'
     }
-},{ timestamps: true });
+}, { timestamps: true });
 
-const Variant = mongoose.models.Variant || mongoose.model('Variant', variantSchema);
+const Variant = mongoose.models.Variant || mongoose.model('Variants', variantSchema);
 export default Variant;

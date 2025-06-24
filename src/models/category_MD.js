@@ -14,7 +14,7 @@ const categorySchema = new mongoose.Schema({
     products: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Products'
-    }]
+    }],
 }, { timestamps: true });
 
 const Categories = mongoose.models.Categories || mongoose.model('Categories', categorySchema);
