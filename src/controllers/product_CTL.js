@@ -114,7 +114,7 @@ export const createProduct = async (req, res, next) => {
             description: req.body.description,
             brand: brand._id,
             category: category._id,
-            images: req.body.image ? [req.body.image] : []
+            images: req.body.images || []
         });
 
         // Cập nhật danh sách sản phẩm trong category và brand

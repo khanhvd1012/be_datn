@@ -38,10 +38,15 @@ const productSchema = Joi.object({
             'string.pattern.base': 'Định dạng ID biến thể không hợp lệ'
         }),
 
-    image: Joi.string()
-        .uri()
-        .messages({
+    images: Joi.array()
+        .items(Joi.string().uri().messages({
             'string.uri': 'URL hình ảnh không hợp lệ'
+        }))
+        .min(1)
+        .required()
+        .messages({
+            'array.base': 'Danh sách hình ảnh phải là một mảng',
+            'array.min': 'Phải có ít nhất 1 hình ảnh'
         })
 });
 

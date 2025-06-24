@@ -15,6 +15,7 @@ const brandSchema = Joi.object({
         'string.uri': 'Logo thương hiệu phải là một URL hợp lệ',
         'any.required': 'Logo thương hiệu là bắt buộc'
     }),
+    
 });
 
 export const validateBrand = async (req, res, next) => {

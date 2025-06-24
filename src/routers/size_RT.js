@@ -12,12 +12,12 @@ import authMiddleware from '../middleware/auth_MID.js';
 const sizeRouter = Router();
 
 // Public routes
-sizeRouter.get('/', authMiddleware, getAllSizes);
-sizeRouter.get('/:id', authMiddleware, getSizeById);
+sizeRouter.get('/', getAllSizes);
+sizeRouter.get('/:id', getSizeById);
 
 // Protected routes (Admin only)
-sizeRouter.post('/', authMiddleware, validateSize, createSize);
-sizeRouter.put('/:id', authMiddleware, validateSize, updateSize);
-sizeRouter.delete('/:id', authMiddleware, deleteSize);
+sizeRouter.post('/', validateSize, createSize);
+sizeRouter.put('/:id', validateSize, updateSize);
+sizeRouter.delete('/:id', deleteSize);
 
 export default sizeRouter;

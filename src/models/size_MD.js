@@ -17,9 +17,9 @@ const sizeSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    products: [{
+    variants: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Products'
+        ref: 'Variants'
     }],
     status: {
         type: String,
