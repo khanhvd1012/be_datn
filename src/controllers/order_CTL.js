@@ -5,8 +5,6 @@ import OrderItem_MD from "../models/orderItem_MD";
 import Stock_MD from "../models/stock_MD";
 import StockHistory_MD from "../models/stockHistory_MD";
 import Variant_MD from "../models/variant_MD";
-import Voucher_MD from "../models/voucher_MD";
-import User_MD from "../models/auth_MD";
 
 // tạo đơn hàng
 export const createOrder = async (req, res) => {
@@ -17,68 +15,10 @@ export const createOrder = async (req, res) => {
         }
 
         const user_id = req.user._id;
-        const { 
-            cart_id, 
-            voucher_code, 
-            shipping_address_id, // ID của địa chỉ có sẵn trong profile
-            shipping_address, // Địa chỉ mới (nếu không dùng địa chỉ có sẵn)
-            full_name, 
-            phone, 
-            payment_method 
-        } = req.body;
+        const { cart_id } = req.body;
 
         if (!cart_id) {
             return res.status(400).json({ message: "Không tìm thấy giỏ hàng" });
-        }
-
-        // Lấy thông tin user
-        const user = await User_MD.findById(user_id);
-        if (!user) {
-            return res.status(404).json({ message: "Không tìm thấy thông tin người dùng" });
-        }
-
-        let fullShippingAddress = '';
-
-        // Nếu có shipping_address_id, sử dụng địa chỉ có sẵn
-        if (shipping_address_id) {
-            const existingAddress = user.shipping_addresses.id(shipping_address_id);
-            if (!existingAddress) {
-                return res.status(404).json({ message: "Không tìm thấy địa chỉ giao hàng đã chọn" });
-            }
-            fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}`;
-        } 
-        // Nếu không có shipping_address_id, yêu cầu thông tin địa chỉ mới
-        else {
-            if (!shipping_address || !full_name || !phone) {
-                return res.status(400).json({ message: "Vui lòng cung cấp đầy đủ thông tin giao hàng" });
-            }
-
-            // Kiểm tra xem đây có phải là đơn hàng đầu tiên của user không
-            const orderCount = await Order_MD.countDocuments({ user_id });
-            const isFirstOrder = orderCount === 0;
-
-            // Cập nhật thông tin cơ bản của user nếu chưa có
-            if (!user.full_name) user.full_name = full_name;
-            if (!user.phone) user.phone = phone;
-
-            // Tạo địa chỉ giao hàng mới
-            const newShippingAddress = {
-                full_name,
-                phone,
-                address: shipping_address,
-                is_default: isFirstOrder // Đặt là địa chỉ mặc định nếu là đơn hàng đầu tiên
-            };
-
-            // Thêm địa chỉ mới vào danh sách địa chỉ của user
-            if (!user.shipping_addresses) {
-                user.shipping_addresses = [];
-            }
-            user.shipping_addresses.push(newShippingAddress);
-
-            // Lưu thông tin user
-            await user.save();
-
-            fullShippingAddress = `${full_name} - ${phone} - ${shipping_address}`;
         }
 
         // kiểm tra giỏ hàng tồn tại và thuộc về user
@@ -134,64 +74,20 @@ export const createOrder = async (req, res) => {
         }
 
         // tính tổng số tiền của đơn hàng
-        let sub_total = 0;
+        let total_price = 0;
+
         for (const item of cart.cart_items) {
             const price = item.variant_id?.price || 0;
-            sub_total += price * item.quantity;
-        }
-
-        // Xử lý voucher nếu có
-        let voucher = null;
-        let voucher_discount = 0;
-        let total_price = sub_total;
-
-        if (voucher_code) {
-            voucher = await Voucher_MD.findOne({ 
-                code: voucher_code.toUpperCase(),
-                isActive: true,
-                startDate: { $lte: new Date() },
-                endDate: { $gte: new Date() },
-                $expr: { $lt: ["$usedCount", "$quantity"] }
-            });
-
-            if (!voucher) {
-                return res.status(400).json({ message: "Mã giảm giá không hợp lệ hoặc đã hết" });
-            }
-
-            // Kiểm tra điều kiện áp dụng voucher
-            if (sub_total < voucher.minOrderValue) {
-                return res.status(400).json({ 
-                    message: `Giá trị đơn hàng tối thiểu để sử dụng voucher là ${voucher.minOrderValue.toLocaleString('vi-VN')}đ` 
-                });
-            }
-
-            // Tính số tiền giảm giá
-            if (voucher.type === 'percentage') {
-                voucher_discount = (sub_total * voucher.value) / 100;
-                if (voucher.maxDiscount) {
-                    voucher_discount = Math.min(voucher_discount, voucher.maxDiscount);
-                }
-            } else { // fixed amount
-                voucher_discount = voucher.value;
-            }
-
-            total_price = sub_total - voucher_discount;
-
-            // Cập nhật số lượng sử dụng voucher
-            voucher.usedCount += 1;
-            await voucher.save();
+            total_price += price * item.quantity;
         }
 
         // tạo đơn hàng
         const order = await Order_MD.create({
             user_id,
             cart_id,
-            voucher_id: voucher?._id || null,
-            voucher_discount,
-            sub_total,
-            total_price,
-            shipping_address: fullShippingAddress,
-            payment_method
+            shipping_address: req.body.shipping_address,
+            payment_method: req.body.payment_method,
+            total_price: total_price
         });
 
         // tạo đơn hàng item
@@ -207,6 +103,27 @@ export const createOrder = async (req, res) => {
             }
 
             orderItemData.push(orderItem);
+
+            // cập nhật số lượng tồn kho
+            // const stock = await Stock_MD.findOneAndUpdate(
+            //     { product_variant_id: item.variant_id. },
+            //     { $inc: { quantity: -item.quantity }             //     { new: true }
+            // );
+
+          / // Cập nhật trạng thái variant nếu hết hàng
+            if (stock.quantity === 0) {
+         //     awaiariant_MD.findByIdAndUpdate(
+            //         item.iant_id._id,
+            //         { sta: 'outOfStock' }
+            //     );
+            //
+            // tạo lịch sử tồn kho
+         await StockHistory_MD.create({
+             stock_id: stock._id               quantity_change: -item.quantity,
+                reason: `Order #${order._id}`,
+                note: `Khách hàng ${req.user.username} đã mua ${item.quantity} sản phẩm`
+            })
+
         }
 
         // tạo đơn hàng item
@@ -222,9 +139,7 @@ export const createOrder = async (req, res) => {
             donHang: {
                 ...order.toObject(),
                 chiTietDonHang: orderItems,
-                tongGoc: sub_total,
-                giamGia: voucher_discount,
-                tongThanhToan: total_price
+                tongGoc: total_price,
             }
         })
 

@@ -1,4 +1,4 @@
-import mongoose from "mongoose"
+import mongoose from "mongoose";
 import mongoosePaginate from 'mongoose-paginate-v2';
 
 /**
@@ -26,22 +26,56 @@ const productSchema = new mongoose.Schema({
     },
     brand: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Brands"
+        ref: "Brand"
     },
     category: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Categories"
     },
+<<<<<<< HEAD
+    variants: [{
+=======
+    gender: {
+        type: String,
+        enum: ['unisex', 'male', 'female']
+    },
+    sizes: [{
+>>>>>>> 1982ae5b937541c479889b7813204594075a6143
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Sizes"
+    }],    
+    colors: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Colors',
+        required: true   
+    },
+    images: [{
+        type: String
+    }],
+<<<<<<< HEAD
+=======
+    price: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    status: {
+        type: String,
+        enum: ['inStock', 'outOfStock'],
+        default: 'inStock'
+    },
     variants: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "Variants"
     }],
-    images: [{
-        type: String
-    }],
+>>>>>>> 1982ae5b937541c479889b7813204594075a6143
 }, { timestamps: true });
 
 // Plugin hỗ trợ phân trang
 productSchema.plugin(mongoosePaginate);
 
+<<<<<<< HEAD
 export default mongoose.model("Products", productSchema);
+=======
+export default mongoose.models.Products || mongoose.model("Products", productSchema);
+>>>>>>> 1982ae5b937541c479889b7813204594075a6143
