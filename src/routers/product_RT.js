@@ -9,15 +9,11 @@ import {
     getProductVariants
 } from "../controllers/product_CTL";
 import authMiddleware from "../middleware/auth_MID";
-<<<<<<< HEAD
 import checkRole from "../middleware/checkRole_MID";
 import { ROLES } from "../config/roles";
 import { paginationHandler, sortHandler, searchHandler } from "../middleware/requestHandler_MID";
 import { validateObjectId } from "../middleware/requestHandler_MID";
 import { AppError } from "../middleware/errorHandler_MID";
-=======
-import { checkDuplicateProductColors } from "../middleware/products_MID";
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
 
 const productRouter = Router();
 
@@ -29,7 +25,6 @@ productRouter.get("/",
     getAllProduct
 );
 
-<<<<<<< HEAD
 // Lấy chi tiết sản phẩm - Validate ID
 productRouter.get("/:id", 
     validateObjectId('id'),
@@ -64,12 +59,5 @@ productRouter.delete("/:id",
     validateObjectId('id'),
     removeProduct
 );
-=======
-// Protected routes (require authentication)
-productRouter.post("/", validateProduct, checkDuplicateProductColors, createProduct);
-productRouter.put("/:id", validateProduct, checkDuplicateProductColors, updateProduct);
-productRouter.delete("/:id", removeProduct);
-productRouter.get("/:id/variants", getProductVariants);
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
 
 export default productRouter;

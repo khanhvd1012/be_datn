@@ -26,26 +26,20 @@ const variantSchema = new mongoose.Schema({
         ref: 'Products',
         required: true
     },
-    sizes: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Sizes',
-        required: true
-    }],
-    quantity: {
-        type: Number,
-        required: true,
-        min: 0,
-        default: 0
-    },
-    color_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Colors',
-        required: true
-    },
     sku: {
         type: String,
-        required: [true, 'SKU là bắt buộc'],
+        required: true,
         unique: true,
+        trim: true
+    },
+    color: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    size: {
+        type: String,
+        required: true,
         trim: true
     },
     price: {
@@ -53,12 +47,11 @@ const variantSchema = new mongoose.Schema({
         required: true,
         min: 0
     },
-    images: [{
+    image_url: [{
         type: String,
-<<<<<<< HEAD
         required: true,
         trim: true
-    },
+    }],
     import_price: {
         type: Number,
         required: true,
@@ -69,22 +62,7 @@ const variantSchema = new mongoose.Schema({
         enum: ['inStock', 'outOfStock'],
         default: 'inStock'
     }
-},{ timestamps: true });
+}, { timestamps: true });
 
 const Variant = mongoose.models.Variant || mongoose.model('Variant', variantSchema);
 export default Variant;
-=======
-        required: true
-    }],
-    status: {
-        type: String,
-        enum: ['active', 'inactive'],
-        default: 'active'
-    }
-
-}, { timestamps: true });
-
-variantSchema.pre('save', updateProductOnVariantSave);
-
-export default mongoose.models.Variants || mongoose.model("Variants", variantSchema);
->>>>>>> 1982ae5b937541c479889b7813204594075a6143

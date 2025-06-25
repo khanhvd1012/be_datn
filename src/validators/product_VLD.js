@@ -1,7 +1,6 @@
 import Joi from 'joi';
-import Product from "../models/product_MD.js";
 
-export const productSchema = Joi.object({
+const productSchema = Joi.object({
     name: Joi.string()
         .min(2)
         .max(100)
@@ -22,7 +21,7 @@ export const productSchema = Joi.object({
         .pattern(/^[0-9a-fA-F]{24}$/)
         .required()
         .messages({
-            'string.pattern.base': 'ID thương hiệu không hợp lệ',
+            'string.pattern.base': 'Định dạng ID thương hiệu không hợp lệ',
             'string.empty': 'ID thương hiệu không được để trống'
         }),
 
@@ -30,124 +29,17 @@ export const productSchema = Joi.object({
         .pattern(/^[0-9a-fA-F]{24}$/)
         .required()
         .messages({
-            'string.pattern.base': 'ID danh mục không hợp lệ',
+            'string.pattern.base': 'Định dạng ID danh mục không hợp lệ',
             'string.empty': 'ID danh mục không được để trống'
         }),
-<<<<<<< HEAD
     variants: Joi.array()
-=======
-
-    gender: Joi.string()
-        .valid('male', 'female', 'unisex')
-        .required()
-        .messages({
-            'any.only': 'Giới tính phải là male, female hoặc unisex',
-            'any.required': 'Giới tính không được để trống'
-        }),
-
-    sizes: Joi.array()
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
         .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
-        .min(1)
         .messages({
-            'array.min': 'Phải chọn ít nhất một size',
-            'string.pattern.base': 'ID size không hợp lệ'
-        }),
-
-    colors: Joi.string()
-        .pattern(/^[0-9a-fA-F]{24}$/)
-        .required()
-        .messages({
-            'string.pattern.base': 'ID màu không hợp lệ',
-            'string.empty': 'ID màu không được để trống',
-            'any.required': 'Sản phẩm phải có một màu'
-        }),
-
-<<<<<<< HEAD
-    image: Joi.string()
-        .uri()
-=======
-    images: Joi.array()
-        .items(Joi.string().uri())
-        .min(1)
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
-        .messages({
-            'array.min': 'Phải có ít nhất một hình ảnh',
-            'string.uri': 'URL hình ảnh không hợp lệ'
-<<<<<<< HEAD
+            'string.pattern.base': 'Định dạng ID biến thể không hợp lệ'
         })
-=======
-        }),
-    price: Joi.number()
-        .min(0)
-        .required()
-        .messages({
-            'number.base': 'Giá phải là một số',
-            'number.min': 'Giá không được âm',
-            'any.required': 'Giá không được để trống'
-        }),
-    variants: Joi.array()
-        .items(Joi.object({
-            sizes: Joi.array()
-                .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
-                .min(1)
-                .required()
-                .messages({
-                    'array.min': 'Biến thể phải có ít nhất một size',
-                    'string.pattern.base': 'ID size không hợp lệ',
-                    'any.required': 'Size là bắt buộc cho biến thể'
-                }),
-            quantity: Joi.number()
-                .min(0)
-                .required()
-                .messages({
-                    'number.base': 'Số lượng phải là một số',
-                    'number.min': 'Số lượng không được âm',
-                    'any.required': 'Số lượng là bắt buộc cho biến thể'
-                }),
-            price: Joi.number()
-                .min(0)
-                .required()
-                .messages({
-                    'number.base': 'Giá phải là một số',
-                    'number.min': 'Giá không được âm',
-                    'any.required': 'Giá là bắt buộc cho biến thể'
-                }),
-            sku: Joi.string()
-                .required()
-                .trim()
-                .messages({
-                    'string.empty': 'SKU không được để trống',
-                    'any.required': 'SKU là bắt buộc cho biến thể'
-                }),
-            color_id: Joi.string()
-                .pattern(/^[0-9a-fA-F]{24}$/)
-                .required()
-                .messages({
-                    'string.pattern.base': 'ID màu không hợp lệ',
-                    'string.empty': 'ID màu không được để trống',
-                    'any.required': 'ID màu là bắt buộc cho biến thể'
-                }),
-            images: Joi.array()
-                .items(Joi.string().uri())
-                .min(1)
-                .required()
-                .messages({
-                    'array.min': 'Phải có ít nhất một hình ảnh cho biến thể',
-                    'array.base': 'Images phải là một mảng',
-                    'string.uri': 'URL hình ảnh không hợp lệ',
-                    'any.required': 'Images là bắt buộc cho biến thể'
-                }),
-            status: Joi.string()
-                .valid('active', 'inactive')
-                .default('active')
-                .messages({
-                    'any.only': 'Trạng thái phải là active hoặc inactive'
-                })
-        }))
-        .optional()
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
 });
+
+import Product from "../models/product_MD.js";
 
 export const validateProduct = async (req, res, next) => {
     try {

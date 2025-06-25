@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-<<<<<<< HEAD
 /**
  * Schema định nghĩa cấu trúc của một đơn hàng
  * @description
@@ -22,8 +21,6 @@ import mongoose from "mongoose";
  * - Virtual fields cho danh sách sản phẩm và labels tiếng Việt
  * - Validate trạng thái đơn hàng
  */
-=======
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
 const orderSchema = new mongoose.Schema({
     user_id: {
         type: mongoose.Schema.Types.ObjectId,
@@ -35,7 +32,6 @@ const orderSchema = new mongoose.Schema({
         ref: 'Cart',
         required: true
     },
-<<<<<<< HEAD
     voucher_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Voucher',
@@ -53,8 +49,6 @@ const orderSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
-=======
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
     status: {
         type: String,
         enum: {
@@ -63,19 +57,8 @@ const orderSchema = new mongoose.Schema({
         },
         default: 'pending'
     },
-<<<<<<< HEAD
     payment_method: {
         type: String,
-=======
-    shipping_address: {
-        type: String
-    },
-    payment_method: {
-        type: String
-    },
-    total_price: {
-        type: Number,
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
         required: true
     },
     cancel_reason: {
@@ -97,23 +80,18 @@ const orderSchema = new mongoose.Schema({
     toObject: { virtuals: true }
 });
 
-<<<<<<< HEAD
 /**
  * Virtual field để lấy danh sách sản phẩm trong đơn hàng
  * @description
  * - Tự động populate các OrderItem liên quan đến đơn hàng
  * - Sử dụng localField và foreignField để join với collection OrderItem
  */
-=======
-// Virtual để lấy các sản phẩm trong đơn hàng
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
 orderSchema.virtual('items', {
     ref: 'OrderItem',
     localField: '_id',
     foreignField: 'order_id'
 });
 
-<<<<<<< HEAD
 /**
  * Virtual field để hiển thị trạng thái đơn hàng bằng tiếng Việt
  * @description
@@ -124,10 +102,6 @@ orderSchema.virtual('items', {
  * - delivered: Đã giao hàng
  * - canceled: Đã hủy
  */
-=======
-
-// Thêm các virtual fields với labels tiếng Việt
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
 orderSchema.virtual('trangThai').get(function () {
     const statusMap = {
         'pending': 'Chờ xử lý',
@@ -139,9 +113,4 @@ orderSchema.virtual('trangThai').get(function () {
     return statusMap[this.status] || this.status;
 });
 
-<<<<<<< HEAD
 export default mongoose.model("Order", orderSchema);
-=======
-
-export default mongoose.model("Orders", orderSchema);
->>>>>>> 1982ae5b937541c479889b7813204594075a6143

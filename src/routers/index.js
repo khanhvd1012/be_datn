@@ -9,15 +9,9 @@ import cartRouter from "./cart_RT";
 import orderRouter from "./order_RT";
 import voucherRouter from "./voucher_RT";
 import reviewRouter from "./review_RT";
-<<<<<<< HEAD
 import roleRouter from "./role_RT";
 import notificationRouter from './notification_RT';
 import cartRestoreRouter from './cartRestore_RT';
-=======
-import uploadRouter from "./upload_RT";
-import sizeRouter from "./size_RT";
-import colorRouter from "./color_RT";
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
 
 const router = Router();
 
@@ -31,14 +25,8 @@ router.use("/carts", cartRouter);
 router.use("/orders", orderRouter);
 router.use("/vouchers", voucherRouter);
 router.use("/reviews", reviewRouter);
-<<<<<<< HEAD
 router.use("/roles", roleRouter);
 router.use('/notifications', notificationRouter);
 router.use('/cart-restore', cartRestoreRouter);
-=======
-router.use("/upload", uploadRouter);
-router.use("/sizes", sizeRouter);
-router.use("/colors", colorRouter);
->>>>>>> 1982ae5b937541c479889b7813204594075a6143
 
 export default router;
