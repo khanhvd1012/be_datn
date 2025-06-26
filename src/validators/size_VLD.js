@@ -2,25 +2,11 @@ import Joi from 'joi';
 import Size from '../models/size_MD.js';
 
 const sizeSchema = Joi.object({
-    name: Joi.string()
+    size: Joi.number()
         .required()
-        .trim()
         .messages({
-            'string.empty': 'Tên size không được để trống',
-            'any.required': 'Tên size là bắt buộc'
-        }),
-    value: Joi.string()
-        .required()
-        .trim()
-        .messages({
-            'string.empty': 'Giá trị size không được để trống',
+            'number.base': 'Giá trị size phải là số',
             'any.required': 'Giá trị size là bắt buộc'
-        }),
-    description: Joi.string()
-        .required()
-        .messages({
-            'string.empty': 'Mô tả size không được để trống',
-            'any.required': 'Mô tả size là bắt buộc'
         }),
     status: Joi.string()
         .valid('active', 'inactive')
@@ -42,29 +28,15 @@ export const validateSize = async (req, res, next) => {
             return res.status(400).json({ errors });
         }
 
-        // Check for duplicate size name
-        const existingNameSize = await Size.findOne({ 
-            name: req.body.name,
-            _id: { $ne: req.params.id } // Exclude current size when updating
-        });
-        if (existingNameSize) {
-            return res.status(400).json({
-                errors: [{
-                    field: 'name',
-                    message: 'Tên size đã tồn tại'
-                }]
-            });
-        }
-
         // Check for duplicate size value
-        const existingValueSize = await Size.findOne({ 
-            value: req.body.value,
+        const existingSize = await Size.findOne({ 
+            size: req.body.size,
             _id: { $ne: req.params.id } // Exclude current size when updating
         });
-        if (existingValueSize) {
+        if (existingSize) {
             return res.status(400).json({
                 errors: [{
-                    field: 'value',
+                    field: 'size',
                     message: 'Giá trị size đã tồn tại'
                 }]
             });

@@ -32,6 +32,6 @@ router.use("/reviews", reviewRouter);
 router.use("/roles", roleRouter);
 router.use('/notifications', notificationRouter);
 router.use('/cart-restore', cartRestoreRouter);
-router.use("/upload", uploadRouter);
+router.use("/upload", uploadRouter)
 
 export default router;

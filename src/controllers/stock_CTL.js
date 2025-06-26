@@ -5,7 +5,6 @@ import CartItem from "../models/cartItem_MD";
 import Cart from "../models/cart_MD";
 import RemovedCartItem from "../models/removedCartItem_MD";
 import Notification from "../models/notification_MD";
-import Product from "../models/product_MD";
 import User from "../models/auth_MD";
 
 // Hằng số cho ngưỡng cảnh báo tồn kho thấp
@@ -122,7 +121,7 @@ export const updateStock = async (req, res) => {
                     await Notification.create({
                         user_id: user._id,
                         title: 'Cảnh báo hàng tồn kho thấp',
-                        message: `${product.name} - ${variant.color} size ${variant.size} sắp hết hàng (còn ${newQuantity} sản phẩm)`,
+                        message: `SKU: ${variant.sku} chỉ còn ${newQuantity} sản phẩm trong kho!`,
                         type: 'low_stock',
                         data: {
                             product_id: product._id,
