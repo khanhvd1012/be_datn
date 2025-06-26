@@ -52,11 +52,11 @@ const variantSchema = new mongoose.Schema({
         required: true,
         min: 0
     },
-    image_url: {
+    image_url: [{
         type: String,
         required: true,
         trim: true
-    },
+    }],
     import_price: {
         type: Number,
         required: true,
@@ -67,7 +67,7 @@ const variantSchema = new mongoose.Schema({
         enum: ['inStock', 'outOfStock'],
         default: 'inStock'
     }
-},{ timestamps: true });
+}, { timestamps: true });
 
 const Variant = mongoose.models.Variant || mongoose.model('Variant', variantSchema);
 export default Variant;

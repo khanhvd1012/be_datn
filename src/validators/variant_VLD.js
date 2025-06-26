@@ -22,13 +22,16 @@ const variantSchema = Joi.object({
             'string.empty': 'Kích thước không được để trống'
         }),
 
-    image_url: Joi.string()
-        .uri()
-        .required()
-        .messages({
+    image_url: Joi.alternatives().try(
+        Joi.array().items(Joi.string().uri().messages({
             'string.uri': 'Định dạng URL ảnh không hợp lệ',
             'string.empty': 'URL ảnh không được để trống'
-        }),
+        })),
+        Joi.string().uri().messages({
+            'string.uri': 'Định dạng URL ảnh không hợp lệ',
+            'string.empty': 'URL ảnh không được để trống'
+        })
+    ).optional(),
 
     price: Joi.number()
         .min(0)

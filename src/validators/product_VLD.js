@@ -36,12 +36,6 @@ const productSchema = Joi.object({
         .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
         .messages({
             'string.pattern.base': 'Định dạng ID biến thể không hợp lệ'
-        }),
-
-    image: Joi.string()
-        .uri()
-        .messages({
-            'string.uri': 'URL hình ảnh không hợp lệ'
         })
 });
 

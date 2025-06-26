@@ -9,7 +9,7 @@ AuthRouter.post("/register", validateRegister, register);
 AuthRouter.post("/login", login);
 AuthRouter.post("/logout", authMiddleware, logout);
 AuthRouter.get("/profile", authMiddleware, getProfile);
-AuthRouter.put("/profile/:id", authMiddleware, updateProfile);
+AuthRouter.put("/profile", authMiddleware, updateProfile);
 AuthRouter.get("/shipping-addresses", authMiddleware, getShippingAddresses);
 AuthRouter.put("/shipping-addresses/:address_id/default", authMiddleware, setDefaultAddress);
 AuthRouter.delete("/shipping-addresses/:address_id", authMiddleware, deleteAddress);

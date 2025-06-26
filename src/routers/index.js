@@ -15,7 +15,6 @@ import cartRestoreRouter from './cartRestore_RT';
 import colorRouter from "./color_RT";
 import sizeRouter from "./size_RT";
 import uploadRouter from "./upload_RT";
-
 const router = Router();
 
 router.use("/auth", authRouter);
@@ -23,11 +22,11 @@ router.use("/brands", brandRouter);
 router.use("/categories", categoryRouter);
 router.use("/products",productRoute);
 router.use("/variants", variantRouter);
-router.use("/colors", colorRouter);
-router.use("/sizes", sizeRouter)
 router.use("/stocks", stockRouter);
 router.use("/carts", cartRouter);   
 router.use("/orders", orderRouter);
+router.use("/colors", colorRouter);
+router.use("/sizes", sizeRouter);
 router.use("/vouchers", voucherRouter);
 router.use("/reviews", reviewRouter);
 router.use("/roles", roleRouter);

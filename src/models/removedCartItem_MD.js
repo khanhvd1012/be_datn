@@ -1,59 +1,54 @@
 import mongoose from "mongoose";
-import { updateVoucherOnSave } from "../middleware/voucher_MID.js";
 
-const voucherSchema = new mongoose.Schema({
-    code: { 
-        type: String, 
-        required: true,
-        unique: true,
-        uppercase: true
+const removedCartItemSchema = new mongoose.Schema({
+    user_id: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: "User", 
+        required: true 
     },
-    type: {
-        type: String,
-        enum: ['percentage', 'fixed'],
+    variant_id: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: "Variant", 
+        required: true 
+    },
+    product_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Products",
         required: true
     },
-    value: {
-        type: Number,
-        required: true,
-        min: 0
+    quantity: { 
+        type: Number, 
+        required: true, 
+        min: 1 
     },
-    maxDiscount: {
-        type: Number,
-        min: 0,
-        default: null
+    removed_at: { 
+        type: Date, 
+        default: Date.now 
     },
-    minOrderValue: {
-        type: Number,
-        min: 0,
-        default: 0
-    },
-    startDate: {
-        type: Date,
-        required: true
-    },
-    endDate: {
-        type: Date,
-        required: true
-    },
-    quantity: {
-        type: Number,
-        min: 0,
-        required: true
-    },
-    usedCount: {
-        type: Number,
-        default: 0
-    },
-    isActive: {
+    auto_restore: {
         type: Boolean,
         default: true
+    },
+    restore_expiry: {
+        type: Date,
+        default: function() {
+            // Mặc định là vĩnh viễn (null)
+            return null;
+        }
+    },
+    notification_sent: {
+        restored: {
+            type: Boolean,
+            default: false
+        }
     }
 }, {
-    timestamps: true
+    timestamps: true,
 });
 
-// Add middleware to update voucher status before save
-voucherSchema.pre('save', updateVoucherOnSave);
+// Tạo index để tìm kiếm nhanh hơn
+removedCartItemSchema.index({ user_id: 1, variant_id: 1 });
+removedCartItemSchema.index({ notification_sent: 1 });
 
-export default mongoose.model("Voucher", voucherSchema);
+const RemovedCartItem = mongoose.models.RemovedCartItem || mongoose.model("RemovedCartItem", removedCartItemSchema);
+export default RemovedCartItem; 

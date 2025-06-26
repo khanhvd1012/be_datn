@@ -53,6 +53,7 @@ const voucherSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Add middleware to update voucher status before save
 voucherSchema.pre('save', updateVoucherOnSave);
 
-export default mongoose.models.Voucher || mongoose.model("Voucher", voucherSchema);
+export default mongoose.model("Voucher", voucherSchema);

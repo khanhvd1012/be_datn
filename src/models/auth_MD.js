@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema(
 );
 
 // Middleware để đảm bảo chỉ có một địa chỉ mặc định
-userSchema.pre('save', async function (next) {
+userSchema.pre('save', async function(next) {
     if (this.isModified('shipping_addresses')) {
         const defaultAddresses = this.shipping_addresses.filter(addr => addr.is_default);
         if (defaultAddresses.length > 1) {

@@ -36,9 +36,6 @@ const productSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Variant"
     }],
-    images: [{
-        type: String
-    }],
 }, { timestamps: true });
 
 // Plugin hỗ trợ phân trang
