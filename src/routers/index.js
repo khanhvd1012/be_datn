@@ -12,6 +12,7 @@ import reviewRouter from "./review_RT";
 import roleRouter from "./role_RT";
 import notificationRouter from './notification_RT';
 import cartRestoreRouter from './cartRestore_RT';
+import sizeRouter from "./size_RT";
 
 const router = Router();
 
@@ -26,7 +27,8 @@ router.use("/orders", orderRouter);
 router.use("/vouchers", voucherRouter);
 router.use("/reviews", reviewRouter);
 router.use("/roles", roleRouter);
-router.use('/notifications', notificationRouter);
-router.use('/cart-restore', cartRestoreRouter);
+router.use("/sizes", sizeRouter);
+router.use("/notifications", notificationRouter);
+router.use("/cart-restore", cartRestoreRouter);
 
 export default router;

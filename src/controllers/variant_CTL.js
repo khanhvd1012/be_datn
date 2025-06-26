@@ -2,6 +2,7 @@ import variant_MD from "../models/variant_MD";
 import product_MD from "../models/product_MD";
 import Stock from "../models/stock_MD";
 import StockHistory from "../models/stockHistory_MD";
+import Size from "../models/size_MD";
 
 /**
  * Hàm tạo SKU cho variant
@@ -18,12 +19,13 @@ import StockHistory from "../models/stockHistory_MD";
  * Ví dụ: NIK-BLA-42-1234 (Nike-Black-42-1234)
  */
 
-const generateSKU = (product, variant) => {
+const generateSKU = async (product, variant) => {
     const productName = product.name.substring(0, 3).toUpperCase();
     const color = variant.color.substring(0, 3).toUpperCase();
-    const size = variant.size.toString();
+    const sizeDoc = await Size.findById(variant.size).select('size').lean();
+    const sizeValue = sizeDoc ? sizeDoc.size : '';
     const timestamp = Date.now().toString().slice(-4);
-    return `${productName}-${color}-${size}-${timestamp}`;
+    return `${productName}-${color}-${sizeValue}-${timestamp}`;
 };
 
 export const createVariant = async (req, res) => {
@@ -42,20 +44,22 @@ export const createVariant = async (req, res) => {
         if (existingVariant) {
             return res.status(400).json({ message: 'Biến thể đã tồn tại' });
         }
-
+        // Kiểm tra size tồn tại
+        const sizeDoc = await Size.findById(req.body.size);
+        if (!sizeDoc) {
+            return res.status(404).json({ message: 'Size không tồn tại' });
+        }
         // Kiểm tra giá nhập không được cao hơn giá bán
         if (req.body.import_price > req.body.price) {
             return res.status(400).json({
                 message: 'Giá nhập không được cao hơn giá bán'
             });
         }
-
-        // Tạo SKU cho variant mới
-        const sku = generateSKU(product, {
+        // Tạo SKU cho variant mới (phải await)
+        const sku = await generateSKU(product, {
             color: req.body.color,
-            size: req.body.size
+            size: req.body.size // truyền ObjectId
         });
-
         // Tạo biến thể mới
         const variant = await variant_MD.create({
             product_id: req.body.product_id,
@@ -65,16 +69,19 @@ export const createVariant = async (req, res) => {
             gender: req.body.gender,
             image_url: req.body.image_url,
             import_price: req.body.import_price,
-            status: 'inStock', // Mặc định là có hàng
-            sku: sku // Thêm SKU vào variant
+            status: 'inStock',
+            sku: sku // sku là string
         });
-
         // Cập nhật danh sách variants trong product
         await product_MD.findByIdAndUpdate(
             req.body.product_id,
             { $push: { variants: variant._id } }
         );
-
+        // Cập nhật variants trong size
+        await Size.findByIdAndUpdate(
+            req.body.size,
+            { $push: { variants: variant._id } }
+        );
         // Nếu có initial_stock, tạo stock record và lịch sử
         if (req.body.initial_stock && req.body.initial_stock > 0) {
             const stock = await Stock.create({
@@ -149,14 +156,16 @@ export const updateVariant = async (req, res) => {
                 return res.status(400).json({ message: 'Biến thể với màu sắc và kích thước này đã tồn tại' });
             }
 
-            // Tạo SKU mới
+            // Tạo SKU mới (phải await)
+            const sku = await generateSKU(product, {
+                color: req.body.color || currentVariant.color,
+                size: req.body.size || currentVariant.size
+            });
+
             const newVariant = {
                 ...currentVariant.toObject(),
                 ...req.body,
-                sku: generateSKU(product, {
-                    color: req.body.color || currentVariant.color,
-                    size: req.body.size || currentVariant.size
-                })
+                sku: sku
             };
 
             // Cập nhật variant với SKU mới
@@ -202,7 +211,7 @@ export const getAllVariants = async (req, res) => {
             query.status = 'inStock';
         }
 
-        const variants = await variant_MD.find(query).populate('product_id');
+        const variants = await variant_MD.find(query).populate('product_id').populate('size');
 
         // Lấy thông tin stock cho mỗi variant
         const variantsWithStock = await Promise.all(
@@ -234,7 +243,8 @@ export const getAllVariants = async (req, res) => {
 export const getVariantById = async (req, res) => {
     try {
         const variant = await variant_MD.findById(req.params.id)
-            .populate('product_id');
+            .populate('product_id')
+            .populate('size');
 
         if (!variant) {
             return res.status(404).json({ message: 'Không tìm thấy biến thể' });
@@ -269,6 +279,12 @@ export const deleteVariant = async (req, res) => {
         // Xóa variant khỏi danh sách variants trong product
         await product_MD.findByIdAndUpdate(
             variant.product_id,
+            { $pull: { variants: variant._id } }
+        );
+
+        // Xóa variant khỏi variants trong size
+        await Size.findByIdAndUpdate(
+            variant.size,
             { $pull: { variants: variant._id } }
         );
 

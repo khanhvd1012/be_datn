@@ -37,11 +37,11 @@ const variantSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    size: {
-        type: String,
-        required: true,
-        trim: true
-    },
+    size: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Sizes',
+        required: true
+    }],
     price: {
         type: Number,
         required: true,

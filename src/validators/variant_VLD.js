@@ -16,10 +16,20 @@ const variantSchema = Joi.object({
             'string.empty': 'Màu sắc không được để trống'
         }),
 
-    size: Joi.string()
+    size: Joi.array()
+        .items(
+            Joi.string()
+                .pattern(/^[0-9a-fA-F]{24}$/)
+                .messages({
+                    'string.pattern.base': 'Định dạng ID size không hợp lệ',
+                    'string.empty': 'Kích thước không được để trống'
+                })
+        )
+        .min(1)
         .required()
         .messages({
-            'string.empty': 'Kích thước không được để trống'
+            'array.base': 'Kích thước phải là một mảng',
+            'array.min': 'Phải có ít nhất một size'
         }),
 
     image_url: Joi.alternatives().try(
