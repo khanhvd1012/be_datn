@@ -11,8 +11,8 @@ variantRouter.get("/", getAllVariants);
 variantRouter.get("/:id", getVariantById);
 
 // Protected routes (require authentication)
-variantRouter.post("/", authMiddleware, validateVariant, createVariant);
-variantRouter.put("/:id", authMiddleware, validateVariant, updateVariant);
-variantRouter.delete("/:id", authMiddleware, deleteVariant);
+variantRouter.post("/", validateVariant, createVariant);
+variantRouter.put("/:id", validateVariant, updateVariant);
+variantRouter.delete("/:id", deleteVariant);
 
 export default variantRouter;

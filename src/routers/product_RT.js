@@ -37,24 +37,18 @@ productRouter.get("/:id/variants",
 );
 
 // Protected routes - Chỉ Admin và Employee mới có quyền
-productRouter.post("/", 
-    authMiddleware, 
-    checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), 
+productRouter.post("/",  
     validateProduct, 
     createProduct
 );
 
-productRouter.put("/:id", 
-    authMiddleware, 
-    checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), 
+productRouter.put("/:id",  
     validateObjectId('id'),
     validateProduct, 
     updateProduct
 );
 
-productRouter.delete("/:id", 
-    authMiddleware, 
-    checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), 
+productRouter.delete("/:id",  
     validateObjectId('id'),
     removeProduct
 );

@@ -196,13 +196,16 @@ export const getAllVariants = async (req, res) => {
     try {
         const { hideOutOfStock } = req.query;
         let query = {};
-        
+
         // Nếu hideOutOfStock=true, chỉ lấy các variant còn hàng
         if (hideOutOfStock === 'true') {
             query.status = 'inStock';
         }
 
-        const variants = await variant_MD.find(query).populate('product_id');
+        const variants = await variant_MD.find(query)
+            .populate('product_id')
+            .populate('color') 
+            .populate('size')
 
         // Lấy thông tin stock cho mỗi variant
         const variantsWithStock = await Promise.all(

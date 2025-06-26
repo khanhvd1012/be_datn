@@ -33,14 +33,19 @@ const variantSchema = new mongoose.Schema({
         trim: true
     },
     color: {
-        type: String,
-        required: true,
-        trim: true
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Colors',
+        required: true
     },
     size: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Sizes',
+        required: true
+    },
+    gender: {
         type: String,
+        enum: ['unisex','male','female'],
         required: true,
-        trim: true
     },
     price: {
         type: Number,

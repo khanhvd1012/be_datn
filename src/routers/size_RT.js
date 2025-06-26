@@ -9,16 +9,17 @@ import {
 import { validateSize } from '../validators/size_VLD.js';
 import authMiddleware from '../middleware/auth_MID.js';
 import checkRole from '../middleware/checkRole_MID.js';
+import { ROLES } from '../config/roles.js';
 
 const sizeRouter = Router();
 
 // Public routes
-sizeRouter.get('/', authMiddleware, getAllSizes);
-sizeRouter.get('/:id', authMiddleware, getSizeById);
+sizeRouter.get('/', getAllSizes);
+sizeRouter.get('/:id', getSizeById);
 
 // Protected routes (Admin only)
-sizeRouter.post('/', authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), validateSize, createSize);
-sizeRouter.put('/:id', authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), validateSize, updateSize);
-sizeRouter.delete('/:id', authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), deleteSize);
+sizeRouter.post('/', validateSize, createSize);
+sizeRouter.put('/:id', validateSize, updateSize);
+sizeRouter.delete('/:id', deleteSize);
 
 export default sizeRouter;
