@@ -20,10 +20,10 @@ const upload = multer({
     if (extname && mimetype) {
       return cb(null, true);
     } else {
-      cb(new Error('Chỉ chấp nhận file ảnh (jpg, jpeg, png)!'));
+      cb(new Error('Chỉ chấp nhận file ảnh (jpg, jpeg, png)!'), false);
     }
   },
-  limits: { fileSize: 5 * 1024 * 1024 }, // Giới hạn 5MB
-});
+  limits: { fileSize: 5 * 1024 * 1024 },
+})
 
 export default upload;

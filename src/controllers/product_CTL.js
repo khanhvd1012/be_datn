@@ -22,7 +22,7 @@ export const getAllProduct = async (req, res, next) => {
             page: pagination.page,
             limit: pagination.limit,
             sort: sorting,
-            populate: ['category', 'brand']
+            populate: ['category', 'brand', 'size']
         });
 
         // Lấy giá thấp nhất từ các biến thể cho mỗi sản phẩm
@@ -64,7 +64,7 @@ export const getAllProduct = async (req, res, next) => {
 export const getOneProduct = async (req, res, next) => {
     try {
         const product = await Product.findById(req.params.id)
-            .populate(['category', 'brand', 'variants']);
+            .populate(['category', 'brand', 'variants', 'size']);
 
         if (!product) {
             throw new AppError('Không tìm thấy sản phẩm', 404);
@@ -90,10 +90,19 @@ export const getOneProduct = async (req, res, next) => {
 export const createProduct = async (req, res, next) => {
     try {
         // Kiểm tra category và brand tồn tại
-        const [category, brand] = await Promise.all([
+        const [category, brand, size] = await Promise.all([
             mongoose.model('Categories').findById(req.body.category),
-            mongoose.model('Brands').findById(req.body.brand)
+            mongoose.model('Brands').findById(req.body.brand),
+            Promise.all((req.body.size || []).map(id => mongoose.model('Sizes').findById(id)))
         ]);
+
+        const invalidSize = size.find(s => !s);
+        if (invalidSize) {
+            return res.status(404).json({
+                success: false,
+                message: `Một hoặc nhiều kích cỡ không hợp lệ`
+            });
+        }
 
         if (!category) {
             return res.status(404).json({
@@ -107,6 +116,12 @@ export const createProduct = async (req, res, next) => {
                 message: `Không tìm thấy thương hiệu với ID: ${req.body.brand}`
             });
         }
+        if (!size) {
+            return res.status(404).json({
+                success: false,
+                message: `Không tìm thấy kích cỡ với ID: ${req.body.size}`
+            });
+        }
 
         // Tạo sản phẩm mới
         const product = await Product.create({
@@ -114,7 +129,7 @@ export const createProduct = async (req, res, next) => {
             description: req.body.description,
             brand: brand._id,
             category: category._id,
-            images: req.body.image ? [req.body.image] : []
+            size: size.map(s => s._id)
         });
 
         // Cập nhật danh sách sản phẩm trong category và brand
@@ -132,7 +147,8 @@ export const createProduct = async (req, res, next) => {
         // Populate thông tin category và brand
         const populatedProduct = await Product.findById(product._id)
             .populate('category', 'name')
-            .populate('brand', 'name');
+            .populate('brand', 'name')
+            .populate('size', 'name');
 
         return res.status(201).json({
             success: true,
@@ -179,12 +195,19 @@ export const updateProduct = async (req, res, next) => {
                 throw new AppError('Thương hiệu không tồn tại', 404);
             }
         }
+        if (req.body.size) {
+            const size = await Promise.all(req.body.size.map(id => mongoose.model('Sizes').findById(id)));
+            const invalidSize = size.find(s => !s);
+            if (invalidSize) {
+                throw new AppError('Một hoặc nhiều kích cỡ không hợp lệ', 404);
+            }
+        }
 
         const updatedProduct = await Product.findByIdAndUpdate(
             req.params.id,
             req.body,
             { new: true, runValidators: true }
-        ).populate(['category', 'brand', 'variants']);
+        ).populate(['category', 'brand', 'size', 'variants']);
 
         return res.status(200).json({
             success: true,

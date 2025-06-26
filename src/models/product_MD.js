@@ -28,6 +28,11 @@ const productSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Brands"
     },
+    size: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Sizes',
+        required: true
+    }],
     category: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Categories"

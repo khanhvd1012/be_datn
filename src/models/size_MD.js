@@ -17,10 +17,6 @@ const sizeSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    variants: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Variants'
-    }],
     status: {
         type: String,
         enum: ['active', 'inactive'],
@@ -29,5 +25,6 @@ const sizeSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+const Size = mongoose.models.Size || mongoose.model('Sizes', sizeSchema);
 
-export default mongoose.model('Sizes', sizeSchema);
+export default Size;
