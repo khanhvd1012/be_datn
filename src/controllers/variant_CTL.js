@@ -211,7 +211,7 @@ export const getAllVariants = async (req, res) => {
             query.status = 'inStock';
         }
 
-        const variants = await variant_MD.find(query).populate('product_id').populate('size');
+        const variants = await variant_MD.find(query).populate('product_id').populate('size').populate('color');
 
         // Lấy thông tin stock cho mỗi variant
         const variantsWithStock = await Promise.all(

@@ -1,4 +1,3 @@
-import mongoose from 'mongoose';
 import Size from '../models/size_MD.js';
 import Variant from '../models/variant_MD.js'; // Thêm dòng này
 

@@ -8,12 +8,6 @@ const sizeSchema = Joi.object({
             'number.base': 'Giá trị size phải là số',
             'any.required': 'Giá trị size là bắt buộc'
         }),
-    status: Joi.string()
-        .valid('active', 'inactive')
-        .default('active')
-        .messages({
-            'any.only': 'Trạng thái phải là active hoặc inactive'
-        })
 });
 
 export const validateSize = async (req, res, next) => {
@@ -29,7 +23,7 @@ export const validateSize = async (req, res, next) => {
         }
 
         // Check for duplicate size value
-        const existingSize = await Size.findOne({ 
+        const existingSize = await Size.findOne({
             size: req.body.size,
             _id: { $ne: req.params.id } // Exclude current size when updating
         });

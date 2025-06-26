@@ -1,10 +1,10 @@
 import Color from "../models/color_MD.js";
-import colorValidator from "../validators/color_VLD.js";
 import Product from "../models/product_MD.js";
 import Variant from "../models/variant_MD.js";
 import Category from "../models/category_MD.js";
 import Brand from "../models/brand_MD.js";
 import Size from "../models/size_MD.js";
+import colorSchema from "../validators/color_VLD.js";
 
 export const getAll = async (req, res) => {
     try {
@@ -43,7 +43,7 @@ export const getById = async (req, res) => {
 
 export const create = async (req, res) => {
     try {
-        const { error } = colorValidator.validate(req.body, { abortEarly: false });
+        const { error } = colorSchema.validate(req.body, { abortEarly: false });
         if (error) {
             const errors = error.details.map((err) => ({
                 message: err.message
@@ -81,7 +81,7 @@ export const create = async (req, res) => {
 
 export const update = async (req, res) => {
     try {
-        const { error } = colorValidator.validate(req.body, { abortEarly: false });
+        const { error } = colorSchema.validate(req.body, { abortEarly: false });
         if (error) {
             const errors = error.details.map((err) => ({
                 message: err.message

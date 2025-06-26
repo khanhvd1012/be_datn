@@ -2,40 +2,31 @@ import Joi from 'joi';
 import Color from '../models/color_MD.js';
 
 const colorSchema = Joi.object({
-    name: Joi.string()
-        .required()
-        .trim()
-        .messages({
-            'string.empty': 'Tên màu sắc không được để trống',
-            'any.required': 'Tên màu sắc là bắt buộc'
-        }),
-    code: Joi.string()
-        .required()
-        .trim()
-        .pattern(/^#([A-Fa-f0-9]{6})$/)
-        .messages({
-            'string.empty': 'Mã màu không được để trống',
-            'string.pattern.base': 'Mã màu phải là mã hex hợp lệ (ví dụ: #FF0000)',
-            'any.required': 'Mã màu là bắt buộc'
-        }),
-    description: Joi.string()
-        .required()
-        .messages({
-            'string.empty': 'Mô tả màu sắc không được để trống',
-            'any.required': 'Mô tả màu sắc là bắt buộc'
-        }),
-    status: Joi.string()
-        .valid('active', 'inactive')
-        .default('active')
-        .messages({
-            'any.only': 'Trạng thái phải là active hoặc inactive'
-        })
+    name: Joi.string().required().trim().messages({
+        'string.empty': 'Tên màu sắc không được để trống',
+        'any.required': 'Tên màu sắc là bắt buộc'
+    }),
+    code: Joi.string().required().trim().pattern(/^#([A-Fa-f0-9]{6})$/).messages({
+        'string.empty': 'Mã màu không được để trống',
+        'string.pattern.base': 'Mã màu phải là mã hex hợp lệ (ví dụ: #FF0000)',
+        'any.required': 'Mã màu là bắt buộc'
+    }),
+    description: Joi.string().required().messages({
+        'string.empty': 'Mô tả màu sắc không được để trống',
+        'any.required': 'Mô tả màu sắc là bắt buộc'
+    }),
+    status: Joi.string().valid('active', 'inactive').default('active').messages({
+        'any.only': 'Trạng thái phải là active hoặc inactive'
+    })
 });
+export default colorSchema;
+
 
 export const validateColor = async (req, res, next) => {
+    console.log("🔥 req.body:", req.body);
     try {
-        // Validate schema
         const { error } = colorSchema.validate(req.body, { abortEarly: false });
+        console.log("✅ Joi validation result:", error);
         if (error) {
             const errors = error.details.map(detail => ({
                 field: detail.context.key,
@@ -44,10 +35,9 @@ export const validateColor = async (req, res, next) => {
             return res.status(400).json({ errors });
         }
 
-        // Check duplicate name
         const existingColorByName = await Color.findOne({
             name: req.body.name,
-            _id: { $ne: req.params.id } // exclude when updating
+            _id: { $ne: req.params.id }
         });
         if (existingColorByName) {
             return res.status(400).json({
@@ -58,7 +48,6 @@ export const validateColor = async (req, res, next) => {
             });
         }
 
-        // Check duplicate code
         const existingColorByCode = await Color.findOne({
             code: req.body.code,
             _id: { $ne: req.params.id }
@@ -77,5 +66,3 @@ export const validateColor = async (req, res, next) => {
         next(err);
     }
 };
-
-export default { validateColor };
