@@ -13,7 +13,7 @@ variantRouter.get("/", getAllVariants);
 variantRouter.get("/:id", getVariantById);
 
 // Protected routes (require authentication)
-variantRouter.post("/", authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), validateVariant, createVariant);
+variantRouter.post("/",  validateVariant, createVariant);
 variantRouter.put("/:id", authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), validateVariant, updateVariant);
 variantRouter.delete("/:id", authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), deleteVariant);
 

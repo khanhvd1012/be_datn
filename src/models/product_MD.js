@@ -41,9 +41,10 @@ const productSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Variant"
     }],
+    slug: { type: String, required: true, unique: true }
 }, { timestamps: true });
 
 // Plugin hỗ trợ phân trang
 productSchema.plugin(mongoosePaginate);
 
-export default mongoose.model("Products", productSchema);
+export default mongoose.models.Products || mongoose.model("Products", productSchema);
