@@ -13,7 +13,6 @@ export const getProductReviews = async (req, res) => {
                 path: "user_id",
                 select: "username image"
             });
-
         // Gắn purchasedOrders vào từng review theo user_id
         const reviewsWithOrders = await Promise.all(
             reviews.map(async (review) => {
