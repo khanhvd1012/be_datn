@@ -23,7 +23,7 @@ export default colorSchema;
 
 
 export const validateColor = async (req, res, next) => {
-    console.log("🔥 req.body:", req.body);
+    console.log("req.body:", req.body);
     try {
         const { error } = colorSchema.validate(req.body, { abortEarly: false });
         console.log("✅ Joi validation result:", error);

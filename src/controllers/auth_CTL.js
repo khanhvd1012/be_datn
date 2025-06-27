@@ -131,6 +131,23 @@ export const getProfile = async (req, res) => {
     }
 }
 
+export const getAllUsers  = async (req, res) => {
+    try {
+        const users = await user_MD.find().select("-password");
+
+        if (!users || users.length === 0) {
+            return res.status(404).json({ message: "Không tìm thấy người dùng nào" });
+        }
+
+        return res.status(200).json({
+            data: users,
+            message: "Lấy danh sách người dùng thành công"
+        });
+    } catch (error) {
+        return res.status(500).json({ message: "Lấy danh sách người dùng thất bại", error });
+    }
+};
+
 // cập nhật thông tin người dùng
 export const updateProfile = async (req, res) => {
     try {
