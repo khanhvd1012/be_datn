@@ -6,10 +6,19 @@ const reviewSchema = new mongoose.Schema({
         ref: "User",
         required: true
     },
+    order_item: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "OrderItem",
+        required: true
+    },
     product_id: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Product",
+        ref: "Products",
         required: true
+    },
+    product_variant_id: { // Thêm trường này để đồng bộ với controller
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Variant"
     },
     rating: {
         type: Number,
@@ -20,6 +29,10 @@ const reviewSchema = new mongoose.Schema({
     comment: {
         type: String,
         required: true
+    },
+    admin_reply: {
+        type: String,
+        default: ""
     }
 }, { timestamps: true })
 

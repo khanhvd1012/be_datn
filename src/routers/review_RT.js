@@ -1,15 +1,15 @@
 import { Router } from "express"
-import { getProductReviews, createReview, updateReview, deleteReview } from "../controllers/review_CLT"
+import { getVariantReviews, createReview, updateReview, deleteReview, getProductReviews, adminReplyReview, } from "../controllers/review_CLT"
 import { validateReview } from "../validators/review_VLD"
 import authMiddleware from "../middleware/auth_MID"
 
 const reviewRouter = Router()
 
-// Public routes
 reviewRouter.get("/:product_id", getProductReviews)
-
-// Protected routes (require authentication)
 reviewRouter.post("/", authMiddleware, validateReview, createReview)
+
+// Sửa lại: PUT dùng để update, không cần truyền product_id qua params, chỉ cần truyền qua body khi cần
+reviewRouter.post("/:id", authMiddleware, adminReplyReview)
 reviewRouter.put("/:id", authMiddleware, validateReview, updateReview)
 reviewRouter.delete("/:id", authMiddleware, deleteReview)
 
