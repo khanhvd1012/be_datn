@@ -6,7 +6,8 @@ import {
     createProduct,
     updateProduct,
     removeProduct,
-    getProductVariants
+    getProductVariants,
+    getProductBySlug
 } from "../controllers/product_CTL";
 import authMiddleware from "../middleware/auth_MID";
 import checkRole from "../middleware/checkRole_MID";
@@ -36,6 +37,9 @@ productRouter.get("/:id/variants",
     validateObjectId('id'),
     getProductVariants
 );
+
+// Lấy chi tiết sản phẩm theo slug
+productRouter.get("/slug/:slug", getProductBySlug);
 
 // Protected routes - Chỉ Admin và Employee mới có quyền
 productRouter.post("/",  

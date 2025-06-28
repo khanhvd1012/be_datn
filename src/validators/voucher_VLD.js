@@ -84,6 +84,21 @@ const voucherSchema = Joi.object({
         .messages({
             'number.base': 'Số lượng phải là số nguyên',
             'number.min': 'Số lượng phải lớn hơn 0'
+        }),
+
+    usedCount: Joi.number()
+        .integer()
+        .min(0)
+        .default(0)
+        .messages({
+            'number.base': 'Số lượt sử dụng phải là số nguyên',
+            'number.min': 'Số lượt sử dụng không được âm'
+        }),
+
+    isActive: Joi.boolean()
+        .default(true)
+        .messages({
+            'boolean.base': 'Trạng thái phải là true hoặc false'
         })
 });
 
@@ -95,7 +110,7 @@ const voucherSchema = Joi.object({
  */
 export const validateVoucher = (req, res, next) => {
     const { error } = voucherSchema.validate(req.body, { abortEarly: false });
-    
+
     if (error) {
         const errors = error.details.map(detail => ({
             field: detail.context.key,
@@ -103,6 +118,6 @@ export const validateVoucher = (req, res, next) => {
         }));
         return res.status(400).json({ errors });
     }
-    
+
     next();
 };

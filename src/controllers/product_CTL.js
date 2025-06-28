@@ -5,6 +5,7 @@ import Brand from "../models/brand_MD";
 import Variant from "../models/variant_MD";
 import { AppError } from "../middleware/errorHandler_MID";
 import Order from "../models/order_MD";
+import slugify from 'slugify';
 
 /**
  * Controller lấy danh sách tất cả sản phẩm
@@ -124,8 +125,11 @@ export const createProduct = async (req, res, next) => {
         }
 
         // Tạo sản phẩm mới
+        const slug = slugify(req.body.name, { lower: true, strict: true });
+
         const product = await Product.create({
             name: req.body.name,
+            slug, // thêm dòng này
             description: req.body.description,
             brand: brand._id,
             category: category._id,
@@ -201,6 +205,9 @@ export const updateProduct = async (req, res, next) => {
             if (invalidSize) {
                 throw new AppError('Một hoặc nhiều kích cỡ không hợp lệ', 404);
             }
+        }
+        if (req.body.name) {
+            req.body.slug = slugify(req.body.name, { lower: true, strict: true });
         }
 
         const updatedProduct = await Product.findByIdAndUpdate(
@@ -296,6 +303,20 @@ export const getProductVariants = async (req, res, next) => {
             success: true,
             data: product.variants
         });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getProductBySlug = async (req, res, next) => {
+    try {
+        const product = await Product.findOne({ slug: req.params.slug })
+            .populate('category')
+            .populate('brand')
+            .populate('size')
+            .populate('variants');
+        if (!product) return res.status(404).json({ message: 'Not found' });
+        res.json({ data: product });
     } catch (error) {
         next(error);
     }
