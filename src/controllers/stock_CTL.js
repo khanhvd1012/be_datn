@@ -71,14 +71,13 @@ export const updateStock = async (req, res) => {
     try {
         const { quantity_change, reason } = req.body;
 
-        // Tìm stock record
-        const stock = await Stock_MD.findOne({ product_variant_id: req.params.id });
+        const stock = await Stock_MD.findById(req.params.id);
         if (!stock) {
             return res.status(404).json({ message: 'Không tìm thấy thông tin tồn kho' });
         }
 
         // Lấy thông tin variant và product
-        const variant = await variant_MD.findById(req.params.id).populate('product_id', 'name');
+        const variant = await variant_MD.findById(stock.product_variant_id).populate('product_id', 'name');
         if (!variant) {
             return res.status(404).json({ message: 'Không tìm thấy biến thể sản phẩm' });
         }
@@ -220,10 +219,9 @@ export const updateStock = async (req, res) => {
     }
 };
 
-// lấy lịch sử tồn kho của 1 biến thể
 export const getOneStockHistory = async (req, res) => {
     try {
-        const stock = await Stock_MD.findOne({ product_variant_id: req.params.id });
+        const stock = await Stock_MD.findById(req.params.id);
         if (!stock) {
             return res.status(404).json({ message: 'Không tìm thấy thông tin tồn kho' });
         }
@@ -246,7 +244,6 @@ export const getOneStockHistory = async (req, res) => {
     }
 };
 
-// lấy lịch sử tồn kho của tất cả biến thể
 export const getAllStockHistory = async (req, res) => {
     try {
         // Lấy tất cả lịch sử kho và sắp xếp theo ngày tạo mới nhất
@@ -266,7 +263,6 @@ export const getAllStockHistory = async (req, res) => {
 
 export const deleteStockHistory = async (req, res) => {
     try {
-        // Kiểm tra xem có truyền ID lịch sử kho không
         const stockHistory = await stockHistory_MD.findByIdAndDelete(req.params.id);
         if (!stockHistory) {
             return res.status(404).json({ message: 'Không tìm thấy lịch sử kho' });
