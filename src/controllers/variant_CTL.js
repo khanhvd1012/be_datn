@@ -3,6 +3,7 @@ import product_MD from "../models/product_MD";
 import Stock from "../models/stock_MD";
 import StockHistory from "../models/stockHistory_MD";
 import Size from "../models/size_MD";
+import review_MD from "../models/review_MD";
 
 /**
  * Hàm tạo SKU cho variant
@@ -205,7 +206,7 @@ export const getAllVariants = async (req, res) => {
     try {
         const { hideOutOfStock } = req.query;
         let query = {};
-        
+
         // Nếu hideOutOfStock=true, chỉ lấy các variant còn hàng
         if (hideOutOfStock === 'true') {
             query.status = 'inStock';
@@ -274,6 +275,24 @@ export const deleteVariant = async (req, res) => {
         const variant = await variant_MD.findById(req.params.id);
         if (!variant) {
             return res.status(404).json({ message: 'Không tìm thấy biến thể' });
+        }
+
+        // Kiểm tra nếu đã có đánh giá cho variant này
+        const hasReview = await review_MD.exists({
+            product_id: variant.product_id,
+            product_variant_id: variant._id
+        });
+
+        // Kiểm tra nếu đã có khách hàng mua thành công (tồn tại stock history xuất kho)
+        const hasSold = await StockHistory.exists({
+            stock_id: { $in: await Stock.find({ product_variant_id: variant._id }).distinct('_id') },
+            quantity_change: { $lt: 0 }
+        });
+
+        if (hasReview || hasSold) {
+            return res.status(400).json({
+                message: 'Không thể xóa biến thể đã có đánh giá hoặc đã có khách hàng mua thành công. Bạn chỉ có thể cập nhật biến thể này.'
+            });
         }
 
         // Xóa variant khỏi danh sách variants trong product

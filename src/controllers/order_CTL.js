@@ -9,6 +9,34 @@ import Voucher_MD from "../models/voucher_MD";
 import User_MD from "../models/auth_MD";
 
 // tạo đơn hàng
+export const getAllOrderAdmin = async (req, res) => {
+    try {
+        // Sửa populate: dùng 'items' (virtual field) thay vì 'order_items'
+        const orders = await Order_MD.find()
+            .populate({
+                path: 'items',
+                populate: {
+                    path: 'variant_id',
+                    select: 'sku price color size',
+                    populate: {
+                        path: 'product_id',
+                        select: 'name'
+                    }
+                }
+            });
+        return res.status(200).json({
+            message: 'Lấy danh sách đơn hàng thành công',
+            data: orders
+        });
+    } catch (error) {
+        console.error('Lỗi khi lấy danh sách đơn hàng:', error);
+        return res.status(500).json({
+            message: 'Đã xảy ra lỗi khi lấy danh sách đơn hàng',
+            error: error.message
+        });
+    }
+};
+
 export const createOrder = async (req, res) => {
     try {
         // kiểm tra user authentication
@@ -238,8 +266,15 @@ export const createOrder = async (req, res) => {
 }
 
 // lấy tất cả đơn hàng
-export const getOrders = async (req, res) => {
+export const getAllOrderUser = async (req, res) => {
+    // Kiểm tra người dùng đã đăng nhập chưa
+    if (!req.user || !req.user._id) {
+        return res.status(401).json({
+            message: "Bạn cần đăng nhập để xem đơn hàng"
+        });
+    }
     try {
+        // Lấy tất cả đơn hàng của người dùng
         const orders = await Order_MD.find({ user_id: req.user._id })
             .populate("user_id", "username email")
             .sort({ createdAt: -1 });

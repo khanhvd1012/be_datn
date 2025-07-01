@@ -2,6 +2,47 @@ import review_MD from "../models/review_MD"
 import Order from "../models/order_MD.js"
 import orderItem_MD from "../models/orderItem_MD.js";
 
+
+export const getAllReviews = async (req, res) => {
+    try {
+        const { page = 1, limit = 20 } = req.query;
+        const skip = (page - 1) * limit;
+
+        const reviews = await review_MD.find()
+            .populate({ path: "user_id", select: "username image" })
+            .populate({
+                path: "order_item",
+                populate: {
+                    path: "variant_id",
+                    select: "color",
+                    populate: { path: "size", select: "size" }
+                }
+            })
+            .skip(skip)
+            .limit(Number(limit))
+            .sort({ createdAt: -1 });
+
+        const total = await review_MD.countDocuments();
+
+        return res.status(200).json({
+            success: true,
+            data: reviews,
+            pagination: {
+                total,
+                page: Number(page),
+                limit: Number(limit),
+                pages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Lỗi khi lấy danh sách đánh giá",
+            error: error.message
+        });
+    }
+};
+
 // lấy đánh giá sản phẩm
 export const getProductReviews = async (req, res) => {
     try {
