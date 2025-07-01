@@ -10,7 +10,7 @@ cartRouter.post("/", authMiddleware, addToCart);
 // Route cập nhật số lượng hàng loạt
 cartRouter.put("/bulk", authMiddleware, updateCartItem);
 // Route cập nhật số lượng đơn lẻ
-cartRouter.put("/:id", authMiddleware, updateCartItem);
+cartRouter.put("/:id", authMiddleware, updateCartItem); 
 cartRouter.delete("/:id", authMiddleware, removeFromCart);
 
 export default cartRouter;

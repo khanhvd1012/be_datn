@@ -1,11 +1,9 @@
 import { Router } from "express";
-import { getAllStock, getOneStock, updateStock, getAllStockHistory, deleteStockHistory, getOneStockHistory } from "../controllers/stock_CTL";
+import { getAllStock, updateStock, getAllStockHistory, deleteStockHistory, getOneStockHistory } from "../controllers/stock_CTL";
 import { validateStockUpdate } from "../validators/stock_VLD";
 import authMiddleware from "../middleware/auth_MID";
 import checkRole from "../middleware/checkRole_MID";
 import { ROLES } from "../config/roles";
-import { checkPermission } from "../middleware/checkRole_MID";
-// import { validateObjectId } from "../middleware/requestHandler_MID";
 
 const stockRouter = Router();
 

@@ -39,7 +39,14 @@ export const getCategoryById = async (req, res) => {
 // Hàm xử lý tạo mới danh mục
 export const createCategory = async (req, res) => {
     try {
+        // Nếu có ảnh được upload
+        if (req.file) {
+            const imageUrl = `http://localhost:3000/uploads/${req.file.filename}`;
+            req.body.logo_image = imageUrl;
+        }
+
         const categoryData = await category_MD.create(req.body);
+
         return res.status(201).json({
             message: 'Danh mục đã được tạo thành công',
             data: categoryData
@@ -48,44 +55,54 @@ export const createCategory = async (req, res) => {
         console.error('Lỗi khi tạo danh mục:', error);
         res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });
     }
-}
+};
+
 
 // Hàm xử lý cập nhật danh mục
 export const updateCategory = async (req, res) => {
     try {
-        const categoryid = await category_MD.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!categoryid) {
+        // Nếu có ảnh mới thì gán vào logo_image
+        if (req.file) {
+            const imageUrl = `http://localhost:3000/uploads/${req.file.filename}`;
+            req.body.logo_image = imageUrl;
+        }
+
+        const category = await category_MD.findByIdAndUpdate(req.params.id, req.body, { new: true });
+
+        if (!category) {
             return res.status(404).json({ message: 'Danh mục không tồn tại' });
         }
+
         res.status(200).json({
             message: 'Danh mục đã được cập nhật thành công',
-            data: categoryid
+            data: category
         });
     } catch (error) {
         console.error('Lỗi khi cập nhật danh mục:', error);
         res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });
     }
-}
+};
+
 
 // Hàm xử lý xóa danh mục 
 export const deleteCategory = async (req, res) => {
     try {
         const categoryId = req.params.id;
-        
+
         // Kiểm tra danh mục có tồn tại không
         const category = await category_MD.findById(categoryId);
         if (!category) {
             return res.status(404).json({ message: 'Danh mục không tồn tại' });
         }
-        
+
         // Xóa tất cả sản phẩm thuộc danh mục này
         await product_MD.deleteMany({ category: categoryId });
 
         // Xóa danh mục
         await category_MD.findByIdAndDelete(categoryId);
-        
-        res.status(200).json({ 
-            message: 'Danh mục và các sản phẩm thuộc danh mục đã được xóa thành công' 
+
+        res.status(200).json({
+            message: 'Danh mục và các sản phẩm thuộc danh mục đã được xóa thành công'
         });
     } catch (error) {
         console.error('Lỗi khi xóa danh mục:', error);

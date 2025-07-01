@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 // Lấy tất cả ảnh
 export const getAllImages = async (req, res) => {
   try {
-    const images = await Image.find(); // hoặc có thể dùng .sort({ createdAt: -1 }) nếu muốn mới nhất trước
+    const images = await Image.find(); 
 
     res.status(200).json({
       message: "Lấy danh sách ảnh thành công",
@@ -53,9 +53,10 @@ export const deleteImage = async (req, res) => {
 
     // Lấy đường dẫn file từ URL
     const filename = path.basename(image.url);
-    const filePath = path.join(__dirname, "../uploads", filename);
+    const filePath = path.join(__dirname, "../../public/uploads", filename);
 
     // Xóa file khỏi thư mục uploads
+    console.log("Xoá file tại:", filePath);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }

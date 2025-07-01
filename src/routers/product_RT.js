@@ -44,17 +44,23 @@ productRouter.get("/slug/:slug", getProductBySlug);
 // Protected routes - Chỉ Admin và Employee mới có quyền
 productRouter.post("/",  
     validateProduct, 
+    authMiddleware, 
+    checkRole(ROLES.ADMIN, ROLES.EMPLOYEE),
     createProduct
 );
 
 productRouter.put("/:id",  
     validateObjectId('id'),
     validateProduct, 
+    authMiddleware, 
+    checkRole(ROLES.ADMIN, ROLES.EMPLOYEE),
     updateProduct
 );
 
 productRouter.delete("/:id",  
     validateObjectId('id'),
+    authMiddleware, 
+    checkRole(ROLES.ADMIN, ROLES.EMPLOYEE),
     removeProduct
 );
 
