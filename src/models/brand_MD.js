@@ -17,6 +17,10 @@ const brandSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Products'
     }],
+    category: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Categories"
+    }],
 }, {
     timestamps: true,
 });

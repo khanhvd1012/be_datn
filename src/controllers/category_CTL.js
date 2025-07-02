@@ -3,66 +3,80 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import category_MD from "../models/category_MD";
 import product_MD from "../models/product_MD";
+import brand_MD from "../models/brand_MD";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Hàm xử lý lấy tất cả danh mục
+// Lấy tất cả danh mục
 export const getAllCategories = async (req, res) => {
     try {
-        // Lấy tất cả danh mục từ cơ sở dữ liệu
+        const categories = await category_MD.find()
+            .populate({ path: "brand", select: "name" });
 
-        const categories = await category_MD.find();
         res.status(200).json(categories);
     } catch (error) {
-        console.error('Lỗi khi lấy dữ liệu danh mục:', error);
+        console.error('Lỗi khi lấy danh mục:', error);
         res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });
     }
-}
+};
 
-// Hàm xử lý lấy danh mục theo ID
+// Lấy danh mục theo ID
 export const getCategoryById = async (req, res) => {
     try {
-        const CategoryId = await category_MD.findById(req.params.id)
+        const category = await category_MD.findById(req.params.id)
             .populate({
                 path: 'products',
                 select: 'name description price images category brand status quantity',
                 model: product_MD
+            })
+            .populate({
+                path: "brand",
+                select: "name",
             });
-        // Kiểm tra nếu không tìm thấy danh mục
-        if (!CategoryId) {
+
+        if (!category) {
             return res.status(404).json({ message: 'Danh mục không tồn tại' });
         }
-        res.status(200).json(CategoryId);
 
+        res.status(200).json(category);
     } catch (error) {
-        console.error('Lỗi khi lấy dữ liệu danh mục:', error);
+        console.error('Lỗi khi lấy danh mục:', error);
         res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });
     }
-}
+};
 
-// Hàm xử lý tạo mới danh mục
+// Tạo mới danh mục
 export const createCategory = async (req, res) => {
     try {
         if (req.file) {
-            const imageUrl = `http://localhost:3000/uploads/${req.file.filename}`;
-            req.body.logo_image = imageUrl;
+            req.body.logo_image = `http://localhost:3000/uploads/${req.file.filename}`;
         }
 
-        const categoryData = await category_MD.create(req.body);
+        // Normalize brand thành mảng
+        if (req.body.brand) {
+            req.body.brand = Array.isArray(req.body.brand) ? req.body.brand : [req.body.brand];
 
-        return res.status(201).json({
-            message: 'Danh mục đã được tạo thành công',
-            data: categoryData
+            const validBrands = await brand_MD.find({ _id: { $in: req.body.brand } });
+            if (validBrands.length !== req.body.brand.length) {
+                return res.status(400).json({ message: "Một hoặc nhiều thương hiệu không hợp lệ" });
+            }
+        }
+
+        const created = await category_MD.create(req.body);
+
+        // Populate brand sau khi tạo
+        const newCategory = await category_MD.findById(created._id)
+            .populate({ path: "brand", select: "name" });
+        
+        res.status(201).json({
+            message: 'Tạo danh mục thành công',
+            data: newCategory
         });
-
     } catch (error) {
-        // Xoá ảnh nếu có lỗi khi tạo
         if (req.file) {
             const filePath = path.join(__dirname, "../../public/uploads", req.file.filename);
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
 
         console.error('Lỗi khi tạo danh mục:', error);
@@ -70,52 +84,47 @@ export const createCategory = async (req, res) => {
     }
 };
 
-// Hàm xử lý cập nhật danh mục
+// Cập nhật danh mục
 export const updateCategory = async (req, res) => {
     try {
-        const categoryId = req.params.id;
-        const category = await category_MD.findById(categoryId);
-
+        const category = await category_MD.findById(req.params.id);
         if (!category) {
-            // Nếu danh mục không tồn tại mà có upload ảnh mới thì xoá ảnh luôn
             if (req.file) {
                 const filePath = path.join(__dirname, "../../public/uploads", req.file.filename);
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
-                }
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             }
-
             return res.status(404).json({ message: 'Danh mục không tồn tại' });
         }
 
-        // Nếu có ảnh mới => xoá ảnh cũ
+        // Nếu có ảnh mới thì xoá ảnh cũ
         if (req.file) {
             if (category.logo_image) {
                 const oldFilename = category.logo_image.split('/uploads/')[1];
                 const oldPath = path.join(__dirname, "../../public/uploads", oldFilename);
-
-                if (fs.existsSync(oldPath)) {
-                    fs.unlinkSync(oldPath);
-                }
+                if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
             }
-
             req.body.logo_image = `http://localhost:3000/uploads/${req.file.filename}`;
         }
 
-        const updatedCategory = await category_MD.findByIdAndUpdate(categoryId, req.body, { new: true });
+        // Normalize brand thành mảng
+        if (req.body.brand) {
+            req.body.brand = Array.isArray(req.body.brand) ? req.body.brand : [req.body.brand];
+            const validBrands = await brand_MD.find({ _id: { $in: req.body.brand } });
+            if (validBrands.length !== req.body.brand.length) {
+                return res.status(400).json({ message: "Một hoặc nhiều thương hiệu không hợp lệ" });
+            }
+        }
+
+        const updated = await category_MD.findByIdAndUpdate(req.params.id, req.body, { new: true });
 
         res.status(200).json({
-            message: 'Danh mục đã được cập nhật thành công',
-            data: updatedCategory,
+            message: 'Cập nhật danh mục thành công',
+            data: updated,
         });
-
     } catch (error) {
-        // Nếu có ảnh upload mà lỗi thì xoá
         if (req.file) {
             const filePath = path.join(__dirname, "../../public/uploads", req.file.filename);
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
 
         console.error('Lỗi khi cập nhật danh mục:', error);
@@ -123,41 +132,26 @@ export const updateCategory = async (req, res) => {
     }
 };
 
-// Hàm xử lý xóa danh mục 
+// Xoá danh mục
 export const deleteCategory = async (req, res) => {
     try {
-        const categoryId = req.params.id;
-
-        // Kiểm tra danh mục có tồn tại không
-        const category = await category_MD.findById(categoryId);
+        const category = await category_MD.findById(req.params.id);
         if (!category) {
             return res.status(404).json({ message: 'Danh mục không tồn tại' });
         }
 
-        // Xóa ảnh nếu có
         if (category.logo_image) {
-            const imageUrl = category.logo_image;
-            const filename = imageUrl.split('/uploads/')[1]; // chỉ lấy phần tên file
+            const filename = category.logo_image.split('/uploads/')[1];
             const filePath = path.join(__dirname, "../../public/uploads", filename);
-
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            } else {
-                console.warn("Ảnh không tồn tại để xóa:", filePath);
-            }
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
 
-        // Xóa tất cả sản phẩm thuộc danh mục này
-        await product_MD.deleteMany({ category: categoryId });
+        await product_MD.deleteMany({ category: req.params.id });
+        await category_MD.findByIdAndDelete(req.params.id);
 
-        // Xóa danh mục
-        await category_MD.findByIdAndDelete(categoryId);
-
-        res.status(200).json({
-            message: 'Danh mục và các sản phẩm thuộc danh mục đã được xóa thành công'
-        });
+        res.status(200).json({ message: 'Danh mục và sản phẩm con đã được xoá' });
     } catch (error) {
+        console.error('Lỗi khi xoá danh mục:', error);
         res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });
     }
-}
-
+};

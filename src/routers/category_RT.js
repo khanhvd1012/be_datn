@@ -25,6 +25,9 @@ categoryRouter.put("/:id",
     upload.single("logo_image"),
     validateCategory,
     updateCategory);
-categoryRouter.delete("/:id", authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), deleteCategory);
+categoryRouter.delete("/:id",
+    authMiddleware, 
+    checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), 
+    deleteCategory);
 
 export default categoryRouter;

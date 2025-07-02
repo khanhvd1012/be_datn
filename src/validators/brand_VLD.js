@@ -1,65 +1,105 @@
 import Joi from 'joi';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import brand_MD from '../models/brand_MD';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const brandSchema = Joi.object({
-    name: Joi.string().required().messages({
+    name: Joi.string().min(2).max(50).required().messages({
         'string.empty': 'Tên thương hiệu không được để trống',
-        'any.required': 'Tên thương hiệu là bắt buộc'
+        'string.min': 'Tên thương hiệu phải có ít nhất 2 ký tự',
+        'string.max': 'Tên thương hiệu không được vượt quá 50 ký tự',
+        'any.required': 'Tên thương hiệu là bắt buộc',
     }),
-    description: Joi.string().required().messages({
+    description: Joi.string().max(500).required().messages({
         'string.empty': 'Mô tả thương hiệu không được để trống',
-        'any.required': 'Mô tả thương hiệu là bắt buộc'
+        'string.max': 'Mô tả không được vượt quá 500 ký tự',
+        'any.required': 'Mô tả thương hiệu là bắt buộc',
     }),
-    logo_image: Joi.string().uri().required().messages({
-        'string.empty': 'Logo thương hiệu không được để trống',
-        'string.uri': 'Logo thương hiệu phải là một URL hợp lệ',
-        'any.required': 'Logo thương hiệu là bắt buộc'
+    logo_image: Joi.string().optional(),
+    category: Joi.alternatives().try(
+        Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)),
+        Joi.string().pattern(/^[0-9a-fA-F]{24}$/)
+    ).optional().messages({
+        'string.pattern.base': 'ID danh mục không hợp lệ',
+        'array.includes': 'Danh sách danh mục chứa ID không hợp lệ',
     }),
 });
 
 export const validateBrand = async (req, res, next) => {
     try {
-        // Kiểm tra cauc dữ liệu đầu vào
+        // Gán logo nếu có
+        if (req.file) {
+            req.body.logo_image = `http://localhost:3000/uploads/${req.file.filename}`;
+        }
+
+        // Chuẩn hóa category nếu là string
+        if (typeof req.body.category === 'string') {
+            req.body.category = [req.body.category];
+        } else if (!Array.isArray(req.body.category)) {
+            req.body.category = [];
+        }
+
+        // Validate dữ liệu
         const { error } = brandSchema.validate(req.body, { abortEarly: false });
         if (error) {
+            //Nếu có file upload và lỗi => xóa file
+            if (req.file) {
+                const filePath = path.join(__dirname, "../../public/uploads", req.file.filename);
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            }
+
             const errors = error.details.map(detail => ({
                 field: detail.context.key,
                 message: detail.message
             }));
             return res.status(400).json({ errors });
         }
-        // Kiểm tra xem thương hiệu đã tồn tại chưa
+
+        // Kiểm tra tên trùng
         const existingBrand = await brand_MD.findOne({
-            name: { $regex: new RegExp(`^${req.body.name}$`, 'i') } // Kiểm tra không phân biệt chữ hoa chữ thường
+            name: { $regex: new RegExp(`^${req.body.name}$`, 'i') }
         });
-        // Nếu không có ID trong yêu cầu và thương hiệu đã tồn tại, trả về lỗi
+
         if (!req.params.id && existingBrand) {
+            if (req.file) {
+                const filePath = path.join(__dirname, "../../public/uploads", req.file.filename);
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            }
+
             return res.status(400).json({
-                errors: [{
-                    field: 'name',
-                    message: 'Tên thương hiệu đã tồn tại'
-                }]
+                errors: [{ field: 'name', message: 'Tên thương hiệu đã tồn tại' }]
             });
         }
 
-        // Nếu đang cập nhật (có id) và tìm thấy brand trùng tên nhưng không phải brand hiện tại
         if (req.params.id && existingBrand && existingBrand._id.toString() !== req.params.id) {
+            if (req.file) {
+                const filePath = path.join(__dirname, "../../public/uploads", req.file.filename);
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            }
+
             return res.status(400).json({
-                errors: [{
-                    field: 'name',
-                    message: 'Tên thương hiệu đã tồn tại'
-                }]
+                errors: [{ field: 'name', message: 'Tên thương hiệu đã tồn tại' }]
             });
         }
 
-        next(); // Tiếp tục nếu không có lỗi
+        next();
     } catch (error) {
-        console.error('Lỗi khi kiểm tra trùng lặp thương hiệu:', error);
+        console.error('Lỗi xác thực thương hiệu:', error);
+
+        if (req.file) {
+            const filePath = path.join(__dirname, "../../public/uploads", req.file.filename);
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        }
+
         return res.status(500).json({
-            message: 'Error validating brand data',
+            message: 'Lỗi xác thực dữ liệu thương hiệu',
             error: error.message
         });
     }
-}
+};
 
 export default brandSchema;

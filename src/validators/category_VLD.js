@@ -1,7 +1,13 @@
 import Joi from 'joi';
 import category_MD from '../models/category_MD';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Không kiểm tra URI vì ảnh upload từ file
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Không kiểm tra URI vì ảnh được upload từ file
 const categorySchema = Joi.object({
     name: Joi.string()
         .min(2)
@@ -24,18 +30,39 @@ const categorySchema = Joi.object({
         }),
 
     logo_image: Joi.string().optional(),
+
+    brand: Joi.alternatives().try(
+        Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)),
+        Joi.string().pattern(/^[0-9a-fA-F]{24}$/)
+    ).required()
+    .messages({
+        'any.required': 'Trường thương hiệu là bắt buộc',
+        'string.pattern.base': 'ID thương hiệu không hợp lệ',
+        'array.includes': 'Danh sách thương hiệu chứa ID không hợp lệ',
+    }),
 });
 
 export const validateCategory = async (req, res, next) => {
+    const deleteUploadedFile = (filename) => {
+        const filePath = path.join(__dirname, "../../public/uploads", filename);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    };
+
     try {
-        // Nếu có file upload thì gán đường dẫn ảnh vào req.body.logo_image
         if (req.file) {
             req.body.logo_image = `http://localhost:3000/uploads/${req.file.filename}`;
+        }
+
+        if (req.body.brand) {
+            req.body.brand = Array.isArray(req.body.brand)
+                ? req.body.brand
+                : [req.body.brand];
         }
 
         const { error } = categorySchema.validate(req.body, { abortEarly: false });
 
         if (error) {
+            if (req.file) deleteUploadedFile(req.file.filename);
             const errors = error.details.map((detail) => ({
                 field: detail.context.key,
                 message: detail.message,
@@ -47,17 +74,19 @@ export const validateCategory = async (req, res, next) => {
             name: { $regex: new RegExp(`^${req.body.name}$`, 'i') },
         });
 
-        if (!req.params.id && existingCategoryByName) {
+        const isUpdate = !!req.params.id;
+
+        if (!isUpdate && existingCategoryByName) {
+            if (req.file) deleteUploadedFile(req.file.filename);
             return res.status(400).json({
                 errors: [{ field: 'name', message: 'Tên danh mục đã tồn tại' }],
             });
         }
 
-        if (
-            req.params.id &&
-            existingCategoryByName &&
+        if (isUpdate && existingCategoryByName &&
             existingCategoryByName._id.toString() !== req.params.id
         ) {
+            if (req.file) deleteUploadedFile(req.file.filename);
             return res.status(400).json({
                 errors: [{ field: 'name', message: 'Tên danh mục đã tồn tại' }],
             });
@@ -65,9 +94,10 @@ export const validateCategory = async (req, res, next) => {
 
         next();
     } catch (error) {
+        if (req.file) deleteUploadedFile(req.file.filename);
         console.error('Category validation error:', error);
         return res.status(500).json({
-            message: 'Error validating category data',
+            message: 'Lỗi xác thực dữ liệu danh mục',
             error: error.message,
         });
     }
