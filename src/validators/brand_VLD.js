@@ -20,6 +20,7 @@ const brandSchema = Joi.object({
         'any.required': 'Mô tả thương hiệu là bắt buộc',
     }),
     logo_image: Joi.string().optional(),
+    
     category: Joi.alternatives().try(
         Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)),
         Joi.string().pattern(/^[0-9a-fA-F]{24}$/)

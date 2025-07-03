@@ -1,102 +1,111 @@
-import Joi from "joi";
+import Joi from 'joi';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const variantSchema = Joi.object({
-    product_id: Joi.string()
-        .pattern(/^[0-9a-fA-F]{24}$/)
-        .required()
-        .messages({
-            'string.pattern.base': 'Định dạng ID sản phẩm không hợp lệ',
-            'string.empty': 'ID sản phẩm không được để trống'
-        }),
-
-    color: Joi.string()
-        .required()
-        .messages({
-            'string.empty': 'Màu sắc không được để trống'
-        }),
-
-    size: Joi.array()
-        .items(
-            Joi.string()
-                .pattern(/^[0-9a-fA-F]{24}$/)
-                .messages({
-                    'string.pattern.base': 'Định dạng ID size không hợp lệ',
-                    'string.empty': 'Kích thước không được để trống'
-                })
-        )
-        .min(1)
-        .required()
-        .messages({
-            'array.base': 'Kích thước phải là một mảng',
-            'array.min': 'Phải có ít nhất một size'
-        }),
-
-    image_url: Joi.alternatives().try(
-        Joi.array().items(Joi.string().uri().messages({
-            'string.uri': 'Định dạng URL ảnh không hợp lệ',
-            'string.empty': 'URL ảnh không được để trống'
-        })),
-        Joi.string().uri().messages({
-            'string.uri': 'Định dạng URL ảnh không hợp lệ',
-            'string.empty': 'URL ảnh không được để trống'
+    product_id: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required().messages({
+        'string.pattern.base': 'Định dạng ID sản phẩm không hợp lệ',
+        'string.empty': 'ID sản phẩm không được để trống'
+    }),
+    color: Joi.string().required().messages({
+        'string.empty': 'Màu sắc không được để trống'
+    }),
+    size: Joi.array().items(
+        Joi.string().pattern(/^[0-9a-fA-F]{24}$/).messages({
+            'string.pattern.base': 'Định dạng ID size không hợp lệ',
+            'string.empty': 'Kích thước không được để trống'
         })
-    ).optional(),
+    ).min(1).required().messages({
+        'array.base': 'Kích thước phải là một mảng',
+        'array.min': 'Phải có ít nhất một size'
+    }),
+    image_url: Joi.array().optional(),
 
-    price: Joi.number()
-        .min(0)
-        .required()
-        .messages({
-            'number.base': 'Giá bán phải là số',
-            'number.min': 'Giá bán không được âm',
-            'number.empty': 'Giá bán không được để trống'
-        }),
-
-    gender: Joi.string()
-        .valid('unisex', 'male', 'female')
-        .required()
-        .messages({
-            'any.only': 'Giới tính phải là unisex, nam hoặc nữ',
-            'string.empty': 'Giới tính không được để trống'
-        }),
-
-    import_price: Joi.number()
-        .min(0)
-        .max(Joi.ref('price'))
-        .required()
-        .messages({
-            'number.base': 'Giá nhập phải là số',
-            'number.min': 'Giá nhập không được âm',
-            'number.max': 'Giá nhập không được cao hơn giá bán',
-            'number.empty': 'Giá nhập không được để trống'
-        }),
-
-    initial_stock: Joi.number()
-        .min(0)
-        .optional()
-        .messages({
-            'number.base': 'Số lượng nhập kho ban đầu phải là số',
-            'number.min': 'Số lượng nhập kho ban đầu không được âm'
-        }),
-
-    status: Joi.string()
-        .valid('inStock', 'outOfStock')
-        .default('inStock')
-        .messages({
-            'any.only': 'Trạng thái phải là inStock hoặc outOfStock'
-        })
+    price: Joi.number().min(0).required().messages({
+        'number.base': 'Giá bán phải là số',
+        'number.min': 'Giá bán không được âm',
+        'number.empty': 'Giá bán không được để trống'
+    }),
+    gender: Joi.string().valid('unisex', 'male', 'female').required().messages({
+        'any.only': 'Giới tính phải là unisex, male hoặc female',
+        'string.empty': 'Giới tính không được để trống'
+    }),
+    import_price: Joi.number().min(0).max(Joi.ref('price')).required().messages({
+        'number.base': 'Giá nhập phải là số',
+        'number.min': 'Giá nhập không được âm',
+        'number.max': 'Giá nhập không được cao hơn giá bán',
+        'number.empty': 'Giá nhập không được để trống'
+    }),
+    initial_stock: Joi.number().min(0).optional().messages({
+        'number.base': 'Số lượng nhập kho ban đầu phải là số',
+        'number.min': 'Số lượng nhập kho ban đầu không được âm'
+    }),
+    status: Joi.string().valid('inStock', 'outOfStock').default('inStock').messages({
+        'any.only': 'Trạng thái phải là inStock hoặc outOfStock'
+    }),
 });
 
 export const validateVariant = (req, res, next) => {
-    const { error } = variantSchema.validate(req.body, { abortEarly: false });
+    try {
+        // Chuẩn hóa size nếu là string
+        if (typeof req.body.size === 'string') {
+            req.body.size = [req.body.size];
+        }
 
-    if (error) {
-        const errors = error.details.map(detail => ({
-            field: detail.context.key,
-            message: detail.message
-        }));
-        return res.status(400).json({ errors });
+        // Chuẩn hóa image_url từ file upload
+        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+            req.body.image_url = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+        }
+
+        // Nếu image_url là chuỗi (từ client) → chuyển về mảng
+        if (typeof req.body.image_url === 'string') {
+            req.body.image_url = [req.body.image_url];
+        }
+
+        // Validate với Joi
+        const { error } = variantSchema.validate(req.body, { abortEarly: false });
+
+        if (error) {
+            // Nếu có file upload → xóa
+            if (req.files && Array.isArray(req.files)) {
+                req.files.forEach(file => {
+                    const filePath = path.join(__dirname, '../../public/uploads', file.filename);
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
+                });
+            }
+
+            const errors = error.details.map(detail => ({
+                field: detail.context.key,
+                message: detail.message
+            }));
+
+            return res.status(400).json({ errors });
+        }
+
+        next();
+    } catch (err) {
+        // Nếu có lỗi hệ thống → xóa file
+        if (req.files && Array.isArray(req.files)) {
+            req.files.forEach(file => {
+                const filePath = path.join(__dirname, '../../public/uploads', file.filename);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            });
+        }
+
+        console.error('Lỗi validate biến thể:', err);
+        return res.status(500).json({
+            message: 'Lỗi xác thực dữ liệu biến thể',
+            error: err.message
+        });
     }
-
-    next();
 };
+
+export default variantSchema;

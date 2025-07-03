@@ -68,7 +68,7 @@ export const createCategory = async (req, res) => {
         // Populate brand sau khi tạo
         const newCategory = await category_MD.findById(created._id)
             .populate({ path: "brand", select: "name" });
-        
+
         res.status(201).json({
             message: 'Tạo danh mục thành công',
             data: newCategory
@@ -111,7 +111,7 @@ export const updateCategory = async (req, res) => {
             req.body.brand = Array.isArray(req.body.brand) ? req.body.brand : [req.body.brand];
             const validBrands = await brand_MD.find({ _id: { $in: req.body.brand } });
             if (validBrands.length !== req.body.brand.length) {
-                return res.status(400).json({ message: "Một hoặc nhiều thương hiệu không hợp lệ" });
+                return res.status(400).json({ message: "Một hoặc nhiều thương hiệu không hợp lệ" }).populate("brand", "name");
             }
         }
 

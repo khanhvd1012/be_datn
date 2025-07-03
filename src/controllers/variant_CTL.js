@@ -1,8 +1,14 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import variant_MD from "../models/variant_MD";
 import product_MD from "../models/product_MD";
 import Stock from "../models/stock_MD";
 import StockHistory from "../models/stockHistory_MD";
 import Size from "../models/size_MD";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Hàm tạo SKU cho variant
@@ -55,6 +61,10 @@ export const createVariant = async (req, res) => {
                 message: 'Giá nhập không được cao hơn giá bán'
             });
         }
+        let imageUrls = [];
+        if (req.files && req.files.length > 0) {
+            imageUrls = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+        }
         // Tạo SKU cho variant mới (phải await)
         const sku = await generateSKU(product, {
             color: req.body.color,
@@ -67,7 +77,7 @@ export const createVariant = async (req, res) => {
             size: req.body.size,
             price: req.body.price,
             gender: req.body.gender,
-            image_url: req.body.image_url,
+            image_url: imageUrls,
             import_price: req.body.import_price,
             status: 'inStock',
             sku: sku // sku là string
@@ -136,6 +146,21 @@ export const updateVariant = async (req, res) => {
             return res.status(404).json({ message: 'Không tìm thấy biến thể' });
         }
 
+        if (req.files && req.files.length > 0) {
+            // Xoá ảnh cũ trong thư mục uploads
+            if (currentVariant.image_url && currentVariant.image_url.length > 0) {
+                for (const url of currentVariant.image_url) {
+                    const filename = url.split('/uploads/')[1];
+                    const filepath = path.join(__dirname, '../../public/uploads', filename);
+                    if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+                }
+            }
+
+            // Tạo mảng URL ảnh mới
+            const newImages = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+            req.body.image_url = newImages;
+        }
+
         // Nếu có thay đổi màu sắc hoặc kích thước, cần tạo SKU mới
         if (req.body.color || req.body.size) {
             // Lấy thông tin sản phẩm
@@ -193,6 +218,12 @@ export const updateVariant = async (req, res) => {
             data: updatedVariant
         });
     } catch (error) {
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                const filepath = path.join(__dirname, '../../public/uploads', file.filename);
+                if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+            }
+        }
         console.error('Lỗi khi cập nhật biến thể:', error);
         return res.status(500).json({
             message: 'Đã xảy ra lỗi khi cập nhật biến thể',
@@ -205,7 +236,7 @@ export const getAllVariants = async (req, res) => {
     try {
         const { hideOutOfStock } = req.query;
         let query = {};
-        
+
         // Nếu hideOutOfStock=true, chỉ lấy các variant còn hàng
         if (hideOutOfStock === 'true') {
             query.status = 'inStock';
@@ -269,11 +300,26 @@ export const getVariantById = async (req, res) => {
     }
 };
 
+const deleteUploadedImages = (imageUrls = []) => {
+    imageUrls.forEach(url => {
+        const filename = url.split('/uploads/')[1];
+        const filePath = path.join(__dirname, '../../public/uploads', filename);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+    });
+};
+
 export const deleteVariant = async (req, res) => {
     try {
         const variant = await variant_MD.findById(req.params.id);
         if (!variant) {
             return res.status(404).json({ message: 'Không tìm thấy biến thể' });
+        }
+
+        // Xoá ảnh nếu có
+        if (variant.image_url && Array.isArray(variant.image_url)) {
+            deleteUploadedImages(variant.image_url);
         }
 
         // Xóa variant khỏi danh sách variants trong product
@@ -282,11 +328,13 @@ export const deleteVariant = async (req, res) => {
             { $pull: { variants: variant._id } }
         );
 
-        // Xóa variant khỏi variants trong size
-        await Size.findByIdAndUpdate(
-            variant.size,
-            { $pull: { variants: variant._id } }
-        );
+        // Xóa variant khỏi tất cả size (nếu size là mảng)
+        if (Array.isArray(variant.size)) {
+            await Size.updateMany(
+                { _id: { $in: variant.size } },
+                { $pull: { variants: variant._id } }
+            );
+        }
 
         // Xóa stock và stock history liên quan
         const stock = await Stock.findOne({ product_variant_id: variant._id });
