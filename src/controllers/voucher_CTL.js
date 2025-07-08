@@ -37,7 +37,7 @@ export const createVoucher = async (req, res) => {
  */
 export const getAllVouchers = async (req, res) => {
     try {
-        const vouchers = await Voucher_MD.find();
+        const vouchers = await Voucher_MD.find().sort({ createdAt: -1 });
         return res.status(200).json(vouchers);
     } catch (error) {
         return res.status(500).json({

@@ -139,7 +139,7 @@ export const getProfile = async (req, res) => {
 
 export const getAllUsers = async (req, res) => {
     try {
-        const users = await user_MD.find().select("-password");
+        const users = await user_MD.find().select("-password").sort({ createdAt: -1 });
 
         if (!users || users.length === 0) {
             return res.status(404).json({ message: "Không tìm thấy người dùng nào" });

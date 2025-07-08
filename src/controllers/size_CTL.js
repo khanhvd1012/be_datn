@@ -19,7 +19,7 @@ export const createSize = async (req, res) => {
 // Lấy tất cả size 
 export const getAllSizes = async (req, res) => {
     try {
-        const sizes = await Size.find();
+        const sizes = await Size.find().sort({ createdAt: -1 });
         return res.status(200).json({
             message: "Lấy danh sách size thành công",
             sizes

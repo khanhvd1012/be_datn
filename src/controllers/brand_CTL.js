@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 // lấy tất cả thương hiệu
 export const getAllBrands = async (req, res) => {
     try {
-        const brands = await brand_MD.find();
+        const brands = await brand_MD.find().sort({ createdAt: -1 });
 
         const brandsWithUpdatedCategories = await Promise.all(
             brands.map(async (brand) => {

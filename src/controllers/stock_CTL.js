@@ -20,7 +20,8 @@ export const getAllStock = async (req, res) => {
                     select: 'name'
                 },
                 select: 'color size product_id'
-            });
+            })
+            .sort({ createdAt: -1 });
 
         // Kiểm tra role của user
         if (req.user && (req.user.role === 'admin' || req.user.role === 'employee')) {

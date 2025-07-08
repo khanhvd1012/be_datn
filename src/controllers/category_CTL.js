@@ -12,7 +12,8 @@ const __dirname = path.dirname(__filename);
 export const getAllCategories = async (req, res) => {
     try {
         const categories = await category_MD.find()
-            .populate({ path: "brand", select: "name" });
+            .populate({ path: "brand", select: "name" })
+            .sort({ createdAt: -1 });
 
         res.status(200).json(categories);
     } catch (error) {

@@ -33,22 +33,22 @@ export const getProductReviews = async (req, res) => {
                         //
                         product_id: review.product_id
                     })
-                    .populate({
-                        path: "order_id",
-                        select: "status"
-                    })
-                    .populate({
-                        path: "product_id",
-                        select: "name"
-                    })
-                    .populate({
-                        path: "variant_id",
-                        select: "color",
-                        populate: {
-                            path: "size",
-                            select: "size"
-                        }
-                    });
+                        .populate({
+                            path: "order_id",
+                            select: "status"
+                        })
+                        .populate({
+                            path: "product_id",
+                            select: "name"
+                        })
+                        .populate({
+                            path: "variant_id",
+                            select: "color",
+                            populate: {
+                                path: "size",
+                                select: "size"
+                            }
+                        });
                 }
                 const reviewObj = review.toObject ? review.toObject() : review;
                 return {
@@ -70,6 +70,62 @@ export const getProductReviews = async (req, res) => {
         })
     }
 }
+
+// lấy tất cả đánh giá
+export const getAllReviews = async (req, res) => {
+    try {
+        const reviews = await review_MD.find()
+            .populate({
+                path: "user_id",
+                select: "username email image"
+            })
+            .populate({
+                path: "order_item",
+                populate: [
+                    {
+                        path: "order_id",
+                        select: "status"
+                    },
+                    {
+                        path: "product_id",
+                        select: "name"
+                    },
+                    {
+                        path: "variant_id",
+                        select: "color",
+                        populate: {
+                            path: "size",
+                            select: "size"
+                        }
+                    }
+                ]
+            })
+            .populate({
+                path: "product_id",
+                select: "name"
+            })
+            .populate({
+                path: "product_variant_id",
+                select: "color",
+                populate: {
+                    path: "size",
+                    select: "size"
+                }
+            })
+            .sort({ createdAt: -1 }); 
+
+        return res.status(200).json({
+            success: true,
+            reviews
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Lỗi khi lấy danh sách đánh giá",
+            error: error.message
+        });
+    }
+};
 
 // tạo đánh giá sản phẩm
 export const createReview = async (req, res) => {

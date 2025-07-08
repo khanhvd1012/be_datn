@@ -8,7 +8,7 @@ import colorSchema from "../validators/color_VLD.js";
 
 export const getAll = async (req, res) => {
     try {
-        const colors = await Color.find();
+        const colors = await Color.find().sort({ createdAt: -1 });
         return res.status(200).json({
             message: "Lấy danh sách màu sắc thành công!",
             colors
