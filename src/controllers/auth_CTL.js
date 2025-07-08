@@ -3,6 +3,12 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import { tokenBlacklist } from "../middleware/auth_MID";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: './.env' });
 
@@ -46,9 +52,9 @@ export const register = async (req, res) => {
     } catch (error) {
         // xử lý lỗi
         console.error('Register error:', error);
-        return res.status(500).json({ 
+        return res.status(500).json({
             message: "Đăng ký thất bại",
-            error: error.message 
+            error: error.message
         });
     }
 }
@@ -131,7 +137,7 @@ export const getProfile = async (req, res) => {
     }
 }
 
-export const getAllUsers  = async (req, res) => {
+export const getAllUsers = async (req, res) => {
     try {
         const users = await user_MD.find().select("-password");
 
@@ -151,21 +157,50 @@ export const getAllUsers  = async (req, res) => {
 // cập nhật thông tin người dùng
 export const updateProfile = async (req, res) => {
     try {
-        // loại bỏ password khỏi dữ liệu cập nhật
         const { password, ...updateData } = req.body;
 
-        // cập nhật thông tin và trả về user đã cập nhật
-        const user = await user_MD.findByIdAndUpdate(
+        const user = await user_MD.findById(req.user._id);
+        if (!user) {
+            if (req.file) {
+                const uploadedPath = path.join(__dirname, "../../public/uploads", req.file.filename);
+                if (fs.existsSync(uploadedPath)) fs.unlinkSync(uploadedPath);
+            }
+            return res.status(404).json({ message: 'Người dùng không tồn tại' });
+        }
+
+        // Nếu có ảnh mới, xử lý xoá ảnh cũ và cập nhật mới
+        if (req.file) {
+            if (user.image) {
+                const oldFilename = user.image.split('/uploads/')[1];
+                const oldPath = path.join(__dirname, "../../public/uploads", oldFilename);
+                if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+            }
+
+            const baseURL = process.env.BASE_URL || "http://localhost:3000";
+            updateData.image = `${baseURL}/uploads/${req.file.filename}`;
+        }
+
+        const updatedUser = await user_MD.findByIdAndUpdate(
             req.user._id,
             updateData,
             { new: true }
         ).select("-password");
 
-        return res.status(200).json(user);
+        res.status(200).json({
+            message: "Cập nhật người dùng thành công",
+            user: updatedUser
+        });
     } catch (error) {
-        return res.status(500).json({ message: error.message });
+        if (req.file) {
+            const filePath = path.join(__dirname, "../../public/uploads", req.file.filename);
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        }
+
+        console.error("Lỗi khi cập nhật người dùng:", error);
+        return res.status(500).json({ message: "Cập nhật thất bại", error: error.message });
     }
-}
+};
+
 
 // Lấy danh sách địa chỉ giao hàng
 export const getShippingAddresses = async (req, res) => {
@@ -193,7 +228,7 @@ export const setDefaultAddress = async (req, res) => {
     try {
         const { address_id } = req.params;
         const user = await user_MD.findById(req.user._id);
-        
+
         if (!user) {
             return res.status(404).json({ message: "Không tìm thấy thông tin người dùng" });
         }
@@ -232,7 +267,7 @@ export const deleteAddress = async (req, res) => {
     try {
         const { address_id } = req.params;
         const user = await user_MD.findById(req.user._id);
-        
+
         if (!user) {
             return res.status(404).json({ message: "Không tìm thấy thông tin người dùng" });
         }

@@ -15,6 +15,7 @@ import cartRestoreRouter from './cartRestore_RT';
 import colorRouter from "./color_RT";
 import sizeRouter from "./size_RT";
 import uploadRouter from "./upload_RT";
+import dashboardRouter from "./dashboard_RT";
 const router = Router();
 
 router.use("/auth", authRouter);
@@ -27,6 +28,7 @@ router.use("/carts", cartRouter);
 router.use("/orders", orderRouter);
 router.use("/colors", colorRouter);
 router.use("/sizes", sizeRouter);
+router.use("/dashboards", dashboardRouter)
 router.use("/vouchers", voucherRouter);
 router.use("/reviews", reviewRouter);
 router.use("/roles", roleRouter);
