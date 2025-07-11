@@ -7,6 +7,7 @@ import StockHistory_MD from "../models/stockHistory_MD";
 import Variant_MD from "../models/variant_MD";
 import Voucher_MD from "../models/voucher_MD";
 import User_MD from "../models/auth_MD";
+import Notification from "../models/notification_MD";
 
 // tạo đơn hàng
 export const getAllOrderAdmin = async (req, res) => {
@@ -407,6 +408,15 @@ export const updateOrderStatus = async (req, res) => {
         order.status = status;
         await order.save();
 
+        // Tạo thông báo cho khách hàng về trạng thái đơn hàng
+        await Notification.create({
+            user_id: order.user_id,
+            title: 'Cập nhật trạng thái đơn hàng',
+            message: `Đơn hàng của bạn đã chuyển sang trạng thái: ${status}`,
+            type: 'order_status',
+            data: {},
+        });
+
         return res.status(200).json(order);
     } catch (error) {
         return res.status(500).json({
@@ -474,6 +484,15 @@ export const cancelOrder = async (req, res) => {
         order.cancelled_at = new Date();
         order.cancelled_by = user_id;
         await order.save();
+
+        // Tạo thông báo cho khách hàng về trạng thái đơn hàng
+        await Notification.create({
+            user_id: order.user_id,
+            title: 'Đơn hàng đã bị hủy',
+            message: `Đơn hàng của bạn đã bị hủy thành công.`,
+            type: 'order_status',
+            data: {},
+        });
 
         // trả về đơn hàng
         return res.status(200).json({ message: "Đơn hàng đã được hủy thành công" });

@@ -290,6 +290,8 @@ export const deleteVariant = async (req, res) => {
         });
 
         if (hasReview || hasSold) {
+            // Không cho phép xóa, chỉ chuyển trạng thái sang outOfStock
+            await variant_MD.findByIdAndUpdate(variant._id, { status: 'outOfStock' });
             return res.status(400).json({
                 message: 'Không thể xóa biến thể đã có đánh giá hoặc đã có khách hàng mua thành công. Bạn chỉ có thể cập nhật biến thể này.'
             });

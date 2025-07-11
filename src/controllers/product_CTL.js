@@ -6,6 +6,7 @@ import Variant from "../models/variant_MD";
 import { AppError } from "../middleware/errorHandler_MID";
 import Order from "../models/order_MD";
 import slugify from 'slugify';
+import Review from "../models/review_MD";
 
 /**
  * Controller lấy danh sách tất cả sản phẩm
@@ -250,6 +251,25 @@ export const removeProduct = async (req, res, next) => {
             throw new AppError('Không thể xóa sản phẩm đã có đơn hàng', 400);
         }
 
+        // Kiểm tra biến thể đã có đánh giá
+        const variants = await Variant.find({ product_id: product._id });
+        for (const variant of variants) {
+            const hasReview = await Review.exists({
+                product_id: product._id,
+                product_variant_id: variant._id
+            });
+            if (hasReview) {
+                // Nếu có biến thể đã có đánh giá, chuyển trạng thái sang outOfStock
+                await Variant.findByIdAndUpdate(variant._id, { status: 'outOfStock' });
+                return res.status(400).json({
+                    message: 'Không thể xóa sản phẩm đã có đánh giá'
+                });
+            } else {
+                // Nếu không có đánh giá, xóa biến thể
+                await Variant.deleteOne({ _id: variant._id });
+            }
+        }
+
         // Xóa sản phẩm khỏi category và brand
         await Promise.all([
             Category.findByIdAndUpdate(
@@ -262,11 +282,13 @@ export const removeProduct = async (req, res, next) => {
             )
         ]);
 
-        // Xóa tất cả biến thể của sản phẩm
-        await Variant.deleteMany({ product_id: product._id });
-
         // Xóa sản phẩm
-        await Product.deleteOne({ _id: product._id });
+        // Chỉ xóa sản phẩm nếu tất cả biến thể đều không có đánh giá
+        const stillHasReviewVariant = await Variant.exists({ product_id: product._id, status: 'outOfStock' });
+        if (!stillHasReviewVariant) {
+            await Product.deleteOne({ _id: product._id });
+        }
+        // Nếu còn biến thể đã có đánh giá, không xóa sản phẩm mà chỉ chuyển trạng thái các biến thể đó
 
         return res.status(200).json({
             success: true,

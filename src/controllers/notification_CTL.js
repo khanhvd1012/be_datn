@@ -10,8 +10,8 @@ export const getAllNotifications = async (req, res) => {
             // Admin và Employee chỉ nhận thông báo tồn kho và đơn hàng mới
             query.type = { $in: ['low_stock', 'new_order'] };
         } else {
-            // User thường chỉ nhận thông báo voucher và hàng có lại
-            query.type = { $in: ['voucher', 'back_in_stock'] };
+            // User thường nhận thêm thông báo trạng thái đơn hàng
+            query.type = { $in: ['voucher', 'back_in_stock', 'order_status'] };
         }
 
         const notifications = await Notification.find(query)
@@ -101,7 +101,7 @@ export const markAllAsRead = async (req, res) => {
         if (req.user.role === 'admin' || req.user.role === 'employee') {
             query.type = { $in: ['low_stock', 'new_order'] };
         } else {
-            query.type = { $in: ['voucher', 'back_in_stock'] };
+            query.type = { $in: ['voucher', 'back_in_stock', 'order_status'] };
         }
 
         await Notification.updateMany(query, { read: true });
@@ -154,7 +154,7 @@ export const deleteAllRead = async (req, res) => {
         if (req.user.role === 'admin' || req.user.role === 'employee') {
             query.type = { $in: ['low_stock', 'new_order'] };
         } else {
-            query.type = { $in: ['voucher', 'back_in_stock'] };
+            query.type = { $in: ['voucher', 'back_in_stock', 'order_status'] };
         }
 
         const result = await Notification.deleteMany(query);
