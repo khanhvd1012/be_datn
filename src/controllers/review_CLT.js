@@ -115,10 +115,11 @@ export const getProductReviews = async (req, res) => {
 // tạo đánh giá sản phẩm
 export const createReview = async (req, res) => {
     try {
-        const { product_id, rating, comment } = req.body
+        const { product_id, rating, comment, order_id } = req.body;
 
         // Kiểm tra đơn hàng đã giao thành công chứa sản phẩm này
         const deliveredOrder = await Order.findOne({
+            _id: order_id,
             user_id: req.user._id,
             status: "delivered"
         });
@@ -131,18 +132,29 @@ export const createReview = async (req, res) => {
         }
 
         // Tìm order_item tương ứng với sản phẩm trong đơn hàng đã giao
-        // deliveredOrder.products có thể undefined nếu không có trường này trong schema
-        // => phải lấy từ OrderItem collection
         const orderItem = await orderItem_MD.findOne({
             order_id: deliveredOrder._id,
             product_id: product_id
         });
 
-        // Nếu không tìm thấy order_item, trả về lỗi
         if (!orderItem) {
             return res.status(400).json({
                 success: false,
                 message: "Không tìm thấy thông tin đơn hàng cho sản phẩm này"
+            });
+        }
+
+        // Kiểm tra đã đánh giá order_item này chưa
+        const existedReview = await review_MD.findOne({
+            user_id: req.user._id,
+            product_id,
+            order_item: orderItem._id
+        });
+
+        if (existedReview) {
+            return res.status(400).json({
+                success: false,
+                message: "Bạn đã đánh giá cho lượt mua này rồi"
             });
         }
 
@@ -151,19 +163,13 @@ export const createReview = async (req, res) => {
             product_id,
             rating,
             comment,
-            order_item: orderItem._id // Lưu order_item vào review
-        })
-
-        // Lấy các đơn hàng mà user đã mua sản phẩm này (có thể chỉ lấy đơn hàng đã giao thành công)
-        const orders = await Order.find({
-            user_id: req.user._id,
-            status: "delivered"
+            order_item: orderItem._id
         });
 
         return res.status(201).json({
             success: true,
             review,
-        })
+        });
     } catch (error) {
         return res.status(500).json({
             success: false,

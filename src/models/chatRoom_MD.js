@@ -5,10 +5,9 @@ const chatRoomSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
-    status: {
-        type: String,
-        enum: ['active', 'closed'],
-        default: 'active'
+    isEmployeeJoined: {
+        type: Boolean,
+        default: false
     },
     lastMessage: {
         type: mongoose.Schema.Types.ObjectId,

@@ -11,21 +11,21 @@ const productSchema = Joi.object({
             'string.max': 'Tên sản phẩm không được vượt quá 100 ký tự'
         }),
 
-    size: Joi.array()
-        .items(
-            Joi.string()
-                .pattern(/^[0-9a-fA-F]{24}$/)
-                .messages({
-                    'string.pattern.base': 'ID kích thước không hợp lệ'
-                })
-        )
-        .min(1)
-        .required()
-        .messages({
-            'array.base': 'Kích thước phải là một mảng',
-            'array.min': 'Phải chọn ít nhất một kích thước',
-            'any.required': 'Kích thước không được để trống'
-        }),
+    // size: Joi.array()
+    //     .items(
+    //         Joi.string()
+    //             .pattern(/^[0-9a-fA-F]{24}$/)
+    //             .messages({
+    //                 'string.pattern.base': 'ID kích thước không hợp lệ'
+    //             })
+    //     )
+    //     .min(1)
+    //     .required()
+    //     .messages({
+    //         'array.base': 'Kích thước phải là một mảng',
+    //         'array.min': 'Phải chọn ít nhất một kích thước',
+    //         'any.required': 'Kích thước không được để trống'
+    //     }),
 
     description: Joi.string()
         .max(1000)

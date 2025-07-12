@@ -15,7 +15,8 @@ import cartRestoreRouter from './cartRestore_RT';
 import colorRouter from "./color_RT";
 import sizeRouter from "./size_RT";
 import uploadRouter from "./upload_RT";
-import chatRouter from './chat_RT.js';
+import chatRouter from "./chat_RT";
+
 const router = Router();
 
 router.use("/auth", authRouter);
@@ -31,9 +32,10 @@ router.use("/sizes", sizeRouter);
 router.use("/vouchers", voucherRouter);
 router.use("/reviews", reviewRouter);
 router.use("/roles", roleRouter);
-router.use('/notifications', notificationRouter);
-router.use('/cart-restore', cartRestoreRouter);
-router.use('/chat', chatRouter);
-router.use("/upload", uploadRouter)
+router.use("/notifications", notificationRouter);
+router.use("/cart-restore", cartRestoreRouter);
+router.use("/upload", uploadRouter);
+router.use("/chats", chatRouter);
+
 
 export default router;

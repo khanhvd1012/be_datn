@@ -7,6 +7,8 @@ import { AppError } from "../middleware/errorHandler_MID";
 import Order from "../models/order_MD";
 import slugify from 'slugify';
 import Review from "../models/review_MD";
+import orderItem_MD from '../models/orderItem_MD';
+import stock_MD from '../models/stock_MD';
 
 /**
  * Controller lấy danh sách tất cả sản phẩm
@@ -95,16 +97,16 @@ export const createProduct = async (req, res, next) => {
         const [category, brand, size] = await Promise.all([
             mongoose.model('Categories').findById(req.body.category),
             mongoose.model('Brands').findById(req.body.brand),
-            Promise.all((req.body.size || []).map(id => mongoose.model('Sizes').findById(id)))
+            // Promise.all((req.body.size || []).map(id => mongoose.model('Sizes').findById(id)))
         ]);
 
-        const invalidSize = size.find(s => !s);
-        if (invalidSize) {
-            return res.status(404).json({
-                success: false,
-                message: `Một hoặc nhiều kích cỡ không hợp lệ`
-            });
-        }
+        // const invalidSize = size.find(s => !s);
+        // if (invalidSize) {
+        //     return res.status(404).json({
+        //         success: false,
+        //         message: `Một hoặc nhiều kích cỡ không hợp lệ`
+        //     });
+        // }
 
         if (!category) {
             return res.status(404).json({
@@ -118,12 +120,12 @@ export const createProduct = async (req, res, next) => {
                 message: `Không tìm thấy thương hiệu với ID: ${req.body.brand}`
             });
         }
-        if (!size) {
-            return res.status(404).json({
-                success: false,
-                message: `Không tìm thấy kích cỡ với ID: ${req.body.size}`
-            });
-        }
+        // if (!size) {
+        //     return res.status(404).json({
+        //         success: false,
+        //         message: `Không tìm thấy kích cỡ với ID: ${req.body.size}`
+        //     });
+        // }
 
         // Tạo sản phẩm mới
         const slug = slugify(req.body.name, { lower: true, strict: true });
@@ -134,7 +136,7 @@ export const createProduct = async (req, res, next) => {
             description: req.body.description,
             brand: brand._id,
             category: category._id,
-            size: size.map(s => s._id)
+            // size: size.map(s => s._id)
         });
 
         // Cập nhật danh sách sản phẩm trong category và brand
@@ -153,7 +155,7 @@ export const createProduct = async (req, res, next) => {
         const populatedProduct = await Product.findById(product._id)
             .populate('category', 'name')
             .populate('brand', 'name')
-            .populate('size', 'name');
+        // .populate('size', 'name');
 
         return res.status(201).json({
             success: true,
@@ -240,15 +242,20 @@ export const removeProduct = async (req, res, next) => {
     try {
         const product = await Product.findById(req.params.id);
         if (!product) {
-            throw new AppError('Không tìm thấy sản phẩm', 404);
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy sản phẩm'
+            });
         }
 
-        // Kiểm tra sản phẩm có đơn hàng không
-        const hasOrders = await Order.exists({
-            'items.product': product._id
-        });
-        if (hasOrders) {
-            throw new AppError('Không thể xóa sản phẩm đã có đơn hàng', 400);
+        // Kiểm tra sản phẩm có đơn hàng không (OrderItem hoặc Order)
+        const hasOrderItem = await orderItem_MD.exists({ product_id: product._id });
+        const hasOrder = await Order.exists({ 'items.product': product._id });
+        if (hasOrderItem || hasOrder) {
+            return res.status(400).json({
+                success: false,
+                message: 'Không thể xóa sản phẩm đã có đơn hàng'
+            });
         }
 
         // Kiểm tra biến thể đã có đánh giá
@@ -256,19 +263,24 @@ export const removeProduct = async (req, res, next) => {
         for (const variant of variants) {
             const hasReview = await Review.exists({
                 product_id: product._id,
-                product_variant_id: variant._id
+                $or: [
+                    { product_variant_id: variant._id },
+                    { variant_id: variant._id }
+                ]
             });
             if (hasReview) {
-                // Nếu có biến thể đã có đánh giá, chuyển trạng thái sang outOfStock
-                await Variant.findByIdAndUpdate(variant._id, { status: 'outOfStock' });
                 return res.status(400).json({
+                    success: false,
                     message: 'Không thể xóa sản phẩm đã có đánh giá'
                 });
-            } else {
-                // Nếu không có đánh giá, xóa biến thể
-                await Variant.deleteOne({ _id: variant._id });
             }
         }
+        // Lấy danh sách ID biến thể để xóa stock
+        const variantIds = variants.map(v => v._id);
+        await stock_MD.deleteMany({ product_variant_id: { $in: variantIds } });
+
+        // Xóa tất cả biến thể của sản phẩm
+        await Variant.deleteMany({ product_id: product._id });
 
         // Xóa sản phẩm khỏi category và brand
         await Promise.all([
@@ -283,12 +295,7 @@ export const removeProduct = async (req, res, next) => {
         ]);
 
         // Xóa sản phẩm
-        // Chỉ xóa sản phẩm nếu tất cả biến thể đều không có đánh giá
-        const stillHasReviewVariant = await Variant.exists({ product_id: product._id, status: 'outOfStock' });
-        if (!stillHasReviewVariant) {
-            await Product.deleteOne({ _id: product._id });
-        }
-        // Nếu còn biến thể đã có đánh giá, không xóa sản phẩm mà chỉ chuyển trạng thái các biến thể đó
+        await Product.deleteOne({ _id: product._id });
 
         return res.status(200).json({
             success: true,
