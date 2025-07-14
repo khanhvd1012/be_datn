@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import variant_MD from "../models/variant_MD";
 import product_MD from "../models/product_MD";
 import Stock from "../models/stock_MD";
+import Color from "../models/color_MD";
 import StockHistory from "../models/stockHistory_MD";
 import Size from "../models/size_MD";
 
@@ -27,7 +28,8 @@ const __dirname = path.dirname(__filename);
 
 const generateSKU = async (product, variant) => {
     const productName = product.name.substring(0, 3).toUpperCase();
-    const color = variant.color.substring(0, 3).toUpperCase();
+    const colorDoc = await Color.findById(variant.color).select("name").lean();
+    const color = colorDoc ? colorDoc.name.substring(0, 3).toUpperCase() : 'UNK';
     const sizeDoc = await Size.findById(variant.size).select('size').lean();
     const sizeValue = sizeDoc ? sizeDoc.size : '';
     const timestamp = Date.now().toString().slice(-4);
@@ -123,6 +125,12 @@ export const createVariant = async (req, res) => {
         });
     } catch (error) {
         console.error('Lỗi khi tạo biến thể:', error);
+
+        // Xóa ảnh nếu có
+        if (req.files && req.files.length > 0) {
+            deleteUploadedImages(req.files);
+        }
+
         return res.status(500).json({
             message: 'Đã xảy ra lỗi khi tạo biến thể',
             error: error.message
@@ -218,13 +226,12 @@ export const updateVariant = async (req, res) => {
             data: updatedVariant
         });
     } catch (error) {
+        // Xóa ảnh nếu có
         if (req.files && req.files.length > 0) {
-            for (const file of req.files) {
-                const filepath = path.join(__dirname, '../../public/uploads', file.filename);
-                if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
-            }
+            deleteUploadedImages(req.files);
         }
         console.error('Lỗi khi cập nhật biến thể:', error);
+
         return res.status(500).json({
             message: 'Đã xảy ra lỗi khi cập nhật biến thể',
             error: error.message
@@ -304,9 +311,14 @@ export const getVariantById = async (req, res) => {
     }
 };
 
-const deleteUploadedImages = (imageUrls = []) => {
-    imageUrls.forEach(url => {
-        const filename = url.split('/uploads/')[1];
+const deleteUploadedImages = (filesOrUrls = []) => {
+    filesOrUrls.forEach(item => {
+        let filename = '';
+        if (typeof item === 'string') {
+            filename = item.split('/uploads/')[1];
+        } else if (item?.filename) {
+            filename = item.filename;
+        }
         const filePath = path.join(__dirname, '../../public/uploads', filename);
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
