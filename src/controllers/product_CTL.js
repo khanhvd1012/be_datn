@@ -91,7 +91,7 @@ export const getOneProduct = async (req, res, next) => {
 export const createProduct = async (req, res, next) => {
     try {
         // Kiểm tra category và brand tồn tại
-        const [category, brand, size] = await Promise.all([
+        const [category, brand] = await Promise.all([
             mongoose.model('Categories').findById(req.body.category),
             mongoose.model('Brands').findById(req.body.brand),
         ]);
@@ -289,7 +289,6 @@ export const getProductBySlug = async (req, res, next) => {
         const product = await Product.findOne({ slug: req.params.slug })
             .populate('category')
             .populate('brand')
-            .populate('size')
             .populate('variants');
         if (!product) return res.status(404).json({ message: 'Not found' });
         res.json({ data: product });
