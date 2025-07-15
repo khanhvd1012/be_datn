@@ -239,7 +239,7 @@ export const createOrder = async (req, res) => {
 
 export const getAllOrders = async (req, res) => {
     try {
-        const orders = await Order.find({})
+        const orders = await Order_MD.find({})
             .populate("user_id", "username email") // Lấy tên và email người đặt hàng
             .populate("cart_id") // Nếu muốn lấy thêm giỏ hàng
             .populate({
