@@ -62,6 +62,10 @@ const variantSchema = new mongoose.Schema({
         required: true,
         min: 0
     },
+    stock: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Stock'
+    },
     status: {
         type: String,
         enum: ['inStock', 'outOfStock'],

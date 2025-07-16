@@ -6,6 +6,7 @@ import Variant from "../models/variant_MD";
 import { AppError } from "../middleware/errorHandler_MID";
 import Order from "../models/order_MD";
 import slugify from 'slugify';
+import Stock from "../models/stock_MD";
 
 /**
  * Controller lấy danh sách tất cả sản phẩm
@@ -284,15 +285,46 @@ export const getProductVariants = async (req, res, next) => {
     }
 };
 
-export const getProductBySlug = async (req, res, next) => {
+export const getProductBySlug = async (req, res) => {
     try {
         const product = await Product.findOne({ slug: req.params.slug })
-            .populate('category')
             .populate('brand')
+            .populate('category')
             .populate('variants');
-        if (!product) return res.status(404).json({ message: 'Not found' });
-        res.json({ data: product });
+
+        if (!product) {
+            return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+        }
+
+        // Lấy thêm thông tin stock cho từng variant
+        const variantsWithStock = await Promise.all(
+            product.variants.map(async (variant) => {
+                const stock = await Stock.findOne({ product_variant_id: variant._id });
+                return {
+                    ...variant.toObject(),
+                    stock: {
+                        quantity: stock ? stock.quantity : 0,
+                        status: variant.status
+                    }
+                };
+            })
+        );
+
+        const productData = {
+            ...product.toObject(),
+            variants: variantsWithStock
+        };
+
+        return res.status(200).json({
+            success: true,
+            data: productData
+        });
     } catch (error) {
-        next(error);
+        console.error('Lỗi khi lấy sản phẩm theo slug:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi máy chủ',
+            error: error.message
+        });
     }
 };

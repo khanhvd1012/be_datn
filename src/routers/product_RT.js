@@ -14,7 +14,6 @@ import checkRole from "../middleware/checkRole_MID";
 import { ROLES } from "../config/roles";
 import { paginationHandler, sortHandler, searchHandler } from "../middleware/requestHandler_MID";
 import { validateObjectId } from "../middleware/requestHandler_MID";
-import { AppError } from "../middleware/errorHandler_MID";
 
 const productRouter = Router();
 
