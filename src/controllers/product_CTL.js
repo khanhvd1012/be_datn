@@ -6,6 +6,8 @@ import Variant from "../models/variant_MD";
 import { AppError } from "../middleware/errorHandler_MID";
 import Order from "../models/order_MD";
 import slugify from 'slugify';
+import Review from "../models/review_MD";
+import orderItem_MD from '../models/orderItem_MD';
 import Stock from "../models/stock_MD";
 
 /**
@@ -216,16 +218,45 @@ export const removeProduct = async (req, res, next) => {
     try {
         const product = await Product.findById(req.params.id);
         if (!product) {
-            throw new AppError('Không tìm thấy sản phẩm', 404);
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy sản phẩm'
+            });
         }
 
-        // Kiểm tra sản phẩm có đơn hàng không
-        const hasOrders = await Order.exists({
-            'items.product': product._id
-        });
-        if (hasOrders) {
-            throw new AppError('Không thể xóa sản phẩm đã có đơn hàng', 400);
+        // Kiểm tra sản phẩm có đơn hàng không (OrderItem hoặc Order)
+        const hasOrderItem = await orderItem_MD.exists({ product_id: product._id });
+        const hasOrder = await Order.exists({ 'items.product': product._id });
+        if (hasOrderItem || hasOrder) {
+            return res.status(400).json({
+                success: false,
+                message: 'Không thể xóa sản phẩm đã có đơn hàng'
+            });
         }
+
+        // Kiểm tra biến thể đã có đánh giá
+        const variants = await Variant.find({ product_id: product._id });
+        for (const variant of variants) {
+            const hasReview = await Review.exists({
+                product_id: product._id,
+                $or: [
+                    { product_variant_id: variant._id },
+                    { variant_id: variant._id }
+                ]
+            });
+            if (hasReview) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Không thể xóa sản phẩm đã có đánh giá'
+                });
+            }
+        }
+        // Lấy danh sách ID biến thể để xóa stock
+        const variantIds = variants.map(v => v._id);
+        await Stock.deleteMany({ product_variant_id: { $in: variantIds } });
+
+        // Xóa tất cả biến thể của sản phẩm
+        await Variant.deleteMany({ product_id: product._id });
 
         // Xóa sản phẩm khỏi category và brand
         await Promise.all([
