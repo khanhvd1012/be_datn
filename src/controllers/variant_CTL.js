@@ -333,7 +333,10 @@ export const deleteVariant = async (req, res) => {
         if (!variant) {
             return res.status(404).json({ message: 'Không tìm thấy biến thể' });
         }
-
+        // Xoá ảnh nếu có
+        if (variant.image_url && Array.isArray(variant.image_url)) {
+            deleteUploadedImages(variant.image_url);
+        }
         // Kiểm tra nếu đã có đánh giá cho variant này
         const hasReview = await review_MD.exists({
             product_id: variant.product_id,

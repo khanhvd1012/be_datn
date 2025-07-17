@@ -6,9 +6,7 @@ import Variant from "../models/variant_MD";
 import { AppError } from "../middleware/errorHandler_MID";
 import Order from "../models/order_MD";
 import slugify from 'slugify';
-import Review from "../models/review_MD";
-import orderItem_MD from '../models/orderItem_MD';
-import stock_MD from '../models/stock_MD';
+import Stock from "../models/stock_MD";
 
 /**
  * Controller lấy danh sách tất cả sản phẩm
@@ -26,7 +24,7 @@ export const getAllProduct = async (req, res, next) => {
             page: pagination.page,
             limit: pagination.limit,
             sort: sorting,
-            populate: ['category', 'brand', 'size']
+            populate: ['category', 'brand']
         });
 
         // Lấy giá thấp nhất từ các biến thể cho mỗi sản phẩm
@@ -68,7 +66,7 @@ export const getAllProduct = async (req, res, next) => {
 export const getOneProduct = async (req, res, next) => {
     try {
         const product = await Product.findById(req.params.id)
-            .populate(['category', 'brand', 'variants', 'size']);
+            .populate(['category', 'brand', 'variants']);
 
         if (!product) {
             throw new AppError('Không tìm thấy sản phẩm', 404);
@@ -94,10 +92,9 @@ export const getOneProduct = async (req, res, next) => {
 export const createProduct = async (req, res, next) => {
     try {
         // Kiểm tra category và brand tồn tại
-        const [category, brand, size] = await Promise.all([
+        const [category, brand] = await Promise.all([
             mongoose.model('Categories').findById(req.body.category),
             mongoose.model('Brands').findById(req.body.brand),
-            // Promise.all((req.body.size || []).map(id => mongoose.model('Sizes').findById(id)))
         ]);
 
         if (!category) {
@@ -186,13 +183,6 @@ export const updateProduct = async (req, res, next) => {
                 throw new AppError('Thương hiệu không tồn tại', 404);
             }
         }
-        if (req.body.size) {
-            const size = await Promise.all(req.body.size.map(id => mongoose.model('Sizes').findById(id)));
-            const invalidSize = size.find(s => !s);
-            if (invalidSize) {
-                throw new AppError('Một hoặc nhiều kích cỡ không hợp lệ', 404);
-            }
-        }
         if (req.body.name) {
             req.body.slug = slugify(req.body.name, { lower: true, strict: true });
         }
@@ -201,7 +191,7 @@ export const updateProduct = async (req, res, next) => {
             req.params.id,
             req.body,
             { new: true, runValidators: true }
-        ).populate(['category', 'brand','variants']);
+        ).populate(['category', 'brand', 'variants']);
 
         return res.status(200).json({
             success: true,
@@ -226,45 +216,16 @@ export const removeProduct = async (req, res, next) => {
     try {
         const product = await Product.findById(req.params.id);
         if (!product) {
-            return res.status(404).json({
-                success: false,
-                message: 'Không tìm thấy sản phẩm'
-            });
+            throw new AppError('Không tìm thấy sản phẩm', 404);
         }
 
-        // Kiểm tra sản phẩm có đơn hàng không (OrderItem hoặc Order)
-        const hasOrderItem = await orderItem_MD.exists({ product_id: product._id });
-        const hasOrder = await Order.exists({ 'items.product': product._id });
-        if (hasOrderItem || hasOrder) {
-            return res.status(400).json({
-                success: false,
-                message: 'Không thể xóa sản phẩm đã có đơn hàng'
-            });
+        // Kiểm tra sản phẩm có đơn hàng không
+        const hasOrders = await Order.exists({
+            'items.product': product._id
+        });
+        if (hasOrders) {
+            throw new AppError('Không thể xóa sản phẩm đã có đơn hàng', 400);
         }
-
-        // Kiểm tra biến thể đã có đánh giá
-        const variants = await Variant.find({ product_id: product._id });
-        for (const variant of variants) {
-            const hasReview = await Review.exists({
-                product_id: product._id,
-                $or: [
-                    { product_variant_id: variant._id },
-                    { variant_id: variant._id }
-                ]
-            });
-            if (hasReview) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Không thể xóa sản phẩm đã có đánh giá'
-                });
-            }
-        }
-        // Lấy danh sách ID biến thể để xóa stock
-        const variantIds = variants.map(v => v._id);
-        await stock_MD.deleteMany({ product_variant_id: { $in: variantIds } });
-
-        // Xóa tất cả biến thể của sản phẩm
-        await Variant.deleteMany({ product_id: product._id });
 
         // Xóa sản phẩm khỏi category và brand
         await Promise.all([
@@ -277,6 +238,9 @@ export const removeProduct = async (req, res, next) => {
                 { $pull: { products: product._id } }
             )
         ]);
+
+        // Xóa tất cả biến thể của sản phẩm
+        await Variant.deleteMany({ product_id: product._id });
 
         // Xóa sản phẩm
         await Product.deleteOne({ _id: product._id });
@@ -321,16 +285,46 @@ export const getProductVariants = async (req, res, next) => {
     }
 };
 
-export const getProductBySlug = async (req, res, next) => {
+export const getProductBySlug = async (req, res) => {
     try {
         const product = await Product.findOne({ slug: req.params.slug })
-            .populate('category')
             .populate('brand')
-            .populate('size')
+            .populate('category')
             .populate('variants');
-        if (!product) return res.status(404).json({ message: 'Not found' });
-        res.json({ data: product });
+
+        if (!product) {
+            return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+        }
+
+        // Lấy thêm thông tin stock cho từng variant
+        const variantsWithStock = await Promise.all(
+            product.variants.map(async (variant) => {
+                const stock = await Stock.findOne({ product_variant_id: variant._id });
+                return {
+                    ...variant.toObject(),
+                    stock: {
+                        quantity: stock ? stock.quantity : 0,
+                        status: variant.status
+                    }
+                };
+            })
+        );
+
+        const productData = {
+            ...product.toObject(),
+            variants: variantsWithStock
+        };
+
+        return res.status(200).json({
+            success: true,
+            data: productData
+        });
     } catch (error) {
-        next(error);
+        console.error('Lỗi khi lấy sản phẩm theo slug:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi máy chủ',
+            error: error.message
+        });
     }
 };
