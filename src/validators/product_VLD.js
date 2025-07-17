@@ -10,7 +10,6 @@ const productSchema = Joi.object({
             'string.min': 'Tên sản phẩm phải có ít nhất 2 ký tự',
             'string.max': 'Tên sản phẩm không được vượt quá 100 ký tự'
         }),
-
     description: Joi.string()
         .max(1000)
         .messages({

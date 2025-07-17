@@ -7,8 +7,37 @@ import StockHistory_MD from "../models/stockHistory_MD";
 import Variant_MD from "../models/variant_MD";
 import Voucher_MD from "../models/voucher_MD";
 import User_MD from "../models/auth_MD";
+import Notification from "../models/notification_MD";
 
 // tạo đơn hàng
+export const getAllOrderAdmin = async (req, res) => {
+    try {
+        // Sửa populate: dùng 'items' (virtual field) thay vì 'order_items'
+        const orders = await Order_MD.find()
+            .populate({
+                path: 'items',
+                populate: {
+                    path: 'variant_id',
+                    select: 'sku price color size',
+                    populate: {
+                        path: 'product_id',
+                        select: 'name'
+                    }
+                }
+            });
+        return res.status(200).json({
+            message: 'Lấy danh sách đơn hàng thành công',
+            data: orders
+        });
+    } catch (error) {
+        console.error('Lỗi khi lấy danh sách đơn hàng:', error);
+        return res.status(500).json({
+            message: 'Đã xảy ra lỗi khi lấy danh sách đơn hàng',
+            error: error.message
+        });
+    }
+};
+
 export const createOrder = async (req, res) => {
     try {
         // kiểm tra user authentication
@@ -268,8 +297,15 @@ export const getAllOrders = async (req, res) => {
 };
 
 // lấy tất cả đơn hàng
-export const getOrders = async (req, res) => {
+export const getAllOrderUser = async (req, res) => {
+    // Kiểm tra người dùng đã đăng nhập chưa
+    if (!req.user || !req.user._id) {
+        return res.status(401).json({
+            message: "Bạn cần đăng nhập để xem đơn hàng"
+        });
+    }
     try {
+        // Lấy tất cả đơn hàng của người dùng
         const orders = await Order_MD.find({ user_id: req.user._id })
             .populate("user_id", "username email")
             .sort({ createdAt: -1 });
@@ -402,6 +438,15 @@ export const updateOrderStatus = async (req, res) => {
         order.status = status;
         await order.save();
 
+        // Tạo thông báo cho khách hàng về trạng thái đơn hàng
+        await Notification.create({
+            user_id: order.user_id,
+            title: 'Cập nhật trạng thái đơn hàng',
+            message: `Đơn hàng của bạn đã chuyển sang trạng thái: ${status}`,
+            type: 'order_status',
+            data: {},
+        });
+
         return res.status(200).json(order);
     } catch (error) {
         return res.status(500).json({
@@ -469,6 +514,15 @@ export const cancelOrder = async (req, res) => {
         order.cancelled_at = new Date();
         order.cancelled_by = user_id;
         await order.save();
+
+        // Tạo thông báo cho khách hàng về trạng thái đơn hàng
+        await Notification.create({
+            user_id: order.user_id,
+            title: 'Đơn hàng đã bị hủy',
+            message: `Đơn hàng của bạn đã bị hủy thành công.`,
+            type: 'order_status',
+            data: {},
+        });
 
         // trả về đơn hàng
         return res.status(200).json({ message: "Đơn hàng đã được hủy thành công" });

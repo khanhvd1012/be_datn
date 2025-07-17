@@ -4,7 +4,7 @@ import Filter from 'leo-profanity';
 // Thêm từ tiếng Việt vào filter
 Filter.add(['địt', 'lồn', 'cặc', 'đụ', 'bú', 'dcm', 'dm', 'đm']);
 
-// Schema cho tạo mới review (bắt buộc product_id)
+// Schema cho tạo mới review (bắt buộc product_id và order_id)
 const createReviewSchema = Joi.object({
     product_id: Joi.string()
         .pattern(/^[0-9a-fA-F]{24}$/)
@@ -12,6 +12,13 @@ const createReviewSchema = Joi.object({
         .messages({
             'string.pattern.base': 'Định dạng ID sản phẩm không hợp lệ',
             'string.empty': 'ID sản phẩm không được để trống'
+        }),
+    order_id: Joi.string()
+        .pattern(/^[0-9a-fA-F]{24}$/)
+        .required()
+        .messages({
+            'string.pattern.base': 'Định dạng ID đơn hàng không hợp lệ',
+            'string.empty': 'ID đơn hàng không được để trống'
         }),
     rating: Joi.number()
         .integer()
