@@ -49,6 +49,30 @@ const variantSchema = Joi.object({
     }),
 });
 
+const cartItemSchema = Joi.object({
+    variant_id: Joi.string()
+        .pattern(/^[0-9a-fA-F]{24}$/)
+        .required()
+        .messages({
+            'string.pattern.base': 'Định dạng ID biến thể không hợp lệ',
+            'string.empty': 'ID biến thể không được để trống'
+        }),
+    selected_size: Joi.string()
+        .pattern(/^[0-9a-fA-F]{24}$/)
+        .required()
+        .messages({
+            'string.pattern.base': 'Định dạng ID size không hợp lệ',
+            'string.empty': 'Vui lòng chọn size'
+        }),
+    quantity: Joi.number()
+        .min(1)
+        .default(1)
+        .messages({
+            'number.base': 'Số lượng phải là số',
+            'number.min': 'Số lượng tối thiểu là 1'
+        })
+});
+
 export const validateVariant = (req, res, next) => {
     try {
         // Chuẩn hóa size nếu là string
@@ -108,4 +132,5 @@ export const validateVariant = (req, res, next) => {
     }
 };
 
+export { cartItemSchema };
 export default variantSchema;

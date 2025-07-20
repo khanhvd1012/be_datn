@@ -403,7 +403,7 @@ export const updateOrderStatus = async (req, res) => {
         }
 
         // Nếu chuyển sang trạng thái shipped, trừ số lượng trong kho
-        if (status === 'shipped') {
+        if (status === 'shipped' || status === 'delivered') {
             // Lấy danh sách các sản phẩm trong đơn hàng
             const orderItems = await OrderItem_MD.find({ order_id: order._id });
 
@@ -463,69 +463,90 @@ export const cancelOrder = async (req, res) => {
             return res.status(401).json({ message: "Vui lòng đăng nhập để tiếp tục" });
         }
 
-        // lấy ID đơn hàng và ID user
         const orderId = req.params.id;
         const user_id = req.user._id;
+        const isAdmin = req.user.role === 'admin';
 
-        // kiểm tra đơn hàng có tồn tại không
         const order = await Order_MD.findById(orderId);
 
         if (!order) {
             return res.status(404).json({ message: "Đơn hàng không tồn tại" });
         }
 
-        // kiểm tra user có quyền hủy đơn hàng không
-        if (!req.user.isAdmin && order.user_id.toString() !== user_id.toString()) {
-            return res.status(403).json({ message: "Bạn không có quyền hủy đơn hàng" });
+        // Admin có thể hủy mọi đơn hàng, user chỉ có thể hủy đơn của mình
+        if (!isAdmin && order.user_id.toString() !== user_id.toString()) {
+            return res.status(403).json({ message: "Bạn không có quyền hủy đơn hàng này" });
         }
 
-        // kiểm tra trạng thái đơn hàng có thể hủy không
-        const nonCancelableStatus = ["shipped", "delivered", "canceled"];
+        // Admin có thể hủy đơn ở mọi trạng thái trừ 'delivered' và 'canceled'
+        // User chỉ có thể hủy đơn ở trạng thái 'pending' và 'processing'
+        const nonCancelableStatus = isAdmin ? ["delivered", "canceled"] : ["shipped", "delivered", "canceled"];
         if (nonCancelableStatus.includes(order.status)) {
-            return res.status(400).json({ message: "Không thể hủy đơn hàng trong trạng thái hiện tại" });
+            return res.status(400).json({ 
+                message: isAdmin 
+                    ? "Không thể hủy đơn hàng đã giao hoặc đã hủy"
+                    : "Không thể hủy đơn hàng trong trạng thái hiện tại" 
+            });
         }
 
-        // lấy đơn hàng item
-        const orderItems = await OrderItem_MD.find({ order_id: orderId });
-
-        if (orderItems && orderItems.length > 0) {
+        // Hoàn lại số lượng cho kho nếu đơn hàng đã shipped
+        if (order.status === 'shipped' && isAdmin) {
+            const orderItems = await OrderItem_MD.find({ order_id: orderId });
+            
             for (const item of orderItems) {
-                // cập nhật số lượng tồn kho
                 const stock = await Stock_MD.findOneAndUpdate(
                     { product_variant_id: item.variant_id },
                     { $inc: { quantity: item.quantity } },
                     { new: true }
                 );
-                // tạo lịch sử tồn kho
+
                 if (stock) {
+                    // Tạo lịch sử tồn kho khi admin hủy
                     await StockHistory_MD.create({
                         stock_id: stock._id,
                         quantity_change: item.quantity,
-                        reason: `Order #${orderId}`,
-                        note: `Khách hàng ${req.user.username} đã hủy đơn hàng`
-                    })
+                        reason: `Admin Cancel Order #${orderId}`,
+                        note: `Admin ${req.user.username} đã hủy đơn hàng đang giao`
+                    });
+
+                    // Kiểm tra và cập nhật trạng thái variant
+                    if (stock.quantity > 0) {
+                        await Variant_MD.findByIdAndUpdate(
+                            item.variant_id,
+                            { status: 'inStock' }
+                        );
+                    }
                 }
             }
         }
 
-        // cập nhật trạng thái đơn hàng
+        // Cập nhật thông tin hủy đơn
         order.status = "canceled";
-        order.cancel_reason = req.body.cancel_reason || "user";
+        order.cancel_reason = req.body.cancel_reason || (isAdmin ? "admin_cancel" : "user_cancel");
         order.cancelled_at = new Date();
         order.cancelled_by = user_id;
         await order.save();
 
-        // Tạo thông báo cho khách hàng về trạng thái đơn hàng
+        // Tạo thông báo cho khách hàng
         await Notification.create({
             user_id: order.user_id,
             title: 'Đơn hàng đã bị hủy',
-            message: `Đơn hàng của bạn đã bị hủy thành công.`,
+            message: isAdmin 
+                ? `Đơn hàng của bạn đã bị hủy bởi Admin với lý do: ${req.body.cancel_reason || 'Không có lý do'}`
+                : `Đơn hàng của bạn đã bị hủy thành công`,
             type: 'order_status',
-            data: {},
+            data: {
+                order_id: orderId,
+                status: 'canceled',
+                canceled_by: isAdmin ? 'admin' : 'user'
+            },
         });
 
-        // trả về đơn hàng
-        return res.status(200).json({ message: "Đơn hàng đã được hủy thành công" });
+        return res.status(200).json({
+            message: "Đơn hàng đã được hủy thành công",
+            data: order
+        });
+
     } catch (error) {
         console.error("Lỗi khi hủy đơn hàng:", error);
         return res.status(500).json({

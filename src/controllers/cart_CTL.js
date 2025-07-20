@@ -56,66 +56,70 @@ export const getOneCart = async (req, res) => {
 // thêm sản phẩm vào giỏ hàng
 export const addToCart = async (req, res) => {
     try {
-        let cart = await cart_MD.findOne({ user_id: req.user._id }); // sử dụng _id từ user đã xác thực
+        let cart = await cart_MD.findOne({ user_id: req.user._id });
         if (!cart) {
             cart = await cart_MD.create({
-                user_id: req.user._id,  // sử dụng _id từ user đã xác thực
+                user_id: req.user._id,
                 cart_items: []
             });
         }
 
         const items = Array.isArray(req.body) ? req.body : [req.body];
-        // kiểm tra xem items có phải là mảng không
-
         const addedItems = [];
         const messages = [];
-        // thêm các sản phẩm vào giỏ hàng
-        for (const item of items) {
-            // lấy  variant_id và quantity từ item
-            const { variant_id, quantity = 1 } = item;
 
-            // Kiểm tra trạng thái variant
-            const variant = await variant_MD.findById(variant_id).populate('product_id', 'name');
+        for (const item of items) {
+            const { variant_id, selected_size, quantity = 1 } = item;
+
+            // Kiểm tra variant tồn tại
+            const variant = await variant_MD.findById(variant_id)
+                .populate('product_id', 'name')
+                .populate('size');
+
             if (!variant) {
                 messages.push(`Không tìm thấy biến thể sản phẩm`);
                 continue;
             }
 
-            // Kiểm tra số lượng tồn kho
+            // Kiểm tra size được chọn có trong mảng size của variant không
+            if (!variant.size.some(s => s._id.toString() === selected_size)) {
+                messages.push(`Size không hợp lệ cho sản phẩm ${variant.product_id.name}`);
+                continue;
+            }
 
-
+            // Kiểm tra trạng thái và tồn kho
             if (variant.status === 'outOfStock') {
-                messages.push(`${variant.product_id.name} - ${variant.color} size ${variant.size} đã hết hàng`);
+                messages.push(`${variant.product_id.name} đã hết hàng`);
                 continue;
             }
 
             const stock = await stock_MD.findOne({ product_variant_id: variant_id });
-
-            if (stock.quantity < quantity) {
-                messages.push(`${variant.product_id.name} - ${variant.color} size ${variant.size} chỉ còn ${stock.quantity} sản phẩm`);
+            if (!stock || stock.quantity < quantity) {
+                messages.push(`${variant.product_id.name} chỉ còn ${stock?.quantity || 0} sản phẩm`);
                 continue;
             }
 
-            // tìm sản phẩm trong giỏ hàng
+            // Tìm item trong giỏ hàng với cùng variant và size
             let existingItem = await cartItem_MD.findOne({
                 cart_id: cart._id,
-                variant_id
+                variant_id,
+                selected_size
             });
-            // nếu sản phẩm đã tồn tại trong giỏ hàng, cập nhật số lượng
+
             if (existingItem) {
                 const newQuantity = existingItem.quantity + quantity;
                 if (newQuantity > stock.quantity) {
-                    messages.push(`${variant.product_id.name} - ${variant.color} size ${variant.size} chỉ còn ${stock.quantity} sản phẩm`);
+                    messages.push(`${variant.product_id.name} chỉ còn ${stock.quantity} sản phẩm`);
                     continue;
                 }
                 existingItem.quantity = newQuantity;
                 await existingItem.save();
                 addedItems.push(existingItem);
             } else {
-                // Nếu sản phẩm chưa tồn tại trong giỏ hàng, tạo mới
                 const newItem = await cartItem_MD.create({
                     cart_id: cart._id,
                     variant_id,
+                    selected_size,
                     quantity
                 });
                 cart.cart_items.push(newItem._id);
@@ -124,7 +128,6 @@ export const addToCart = async (req, res) => {
         }
 
         await cart.save();
-        // Lưu giỏ hàng vào database
 
         return res.status(200).json({
             message: addedItems.length > 0 ? "Thêm sản phẩm vào giỏ hàng thành công" : "Không thể thêm sản phẩm vào giỏ hàng",
