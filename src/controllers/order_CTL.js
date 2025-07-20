@@ -402,8 +402,8 @@ export const updateOrderStatus = async (req, res) => {
             });
         }
 
-        // Nếu chuyển sang trạng thái shipped, trừ số lượng trong kho
-        if (status === 'shipped' || status === 'delivered') {
+        // Trừ tồn kho khi chuyển sang "shipped" hoặc "delivered" mà trạng thái hiện tại chưa phải "shipped"
+        if ((status === 'shipped' || status === 'delivered') && order.status !== 'shipped') {
             // Lấy danh sách các sản phẩm trong đơn hàng
             const orderItems = await OrderItem_MD.find({ order_id: order._id });
 
