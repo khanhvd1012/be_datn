@@ -57,7 +57,7 @@ const cartItemSchema = Joi.object({
             'string.pattern.base': 'Định dạng ID biến thể không hợp lệ',
             'string.empty': 'ID biến thể không được để trống'
         }),
-    selected_size: Joi.string()
+    size_id: Joi.string()
         .pattern(/^[0-9a-fA-F]{24}$/)
         .required()
         .messages({

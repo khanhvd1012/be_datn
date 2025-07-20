@@ -4,6 +4,7 @@ import stock_MD from "../models/stock_MD";
 import variant_MD from "../models/variant_MD";
 
 
+
 export const getOneCart = async (req, res) => {
     try {
         // lấy giỏ hàng của user
@@ -14,11 +15,21 @@ export const getOneCart = async (req, res) => {
                 populate: [
                     {
                         path: 'variant_id',
-                        select: 'color size price image_url',
-                        populate: {
-                            path: 'product_id',
-                            select: 'name'
-                        }
+                        select: 'price image_url product_id color',
+                        populate: [
+                            {
+                                path: 'product_id',
+                                select: 'name'
+                            },
+                            {
+                                path: 'color',
+                                select: 'name'
+                            }
+                        ]
+                    },
+                    {
+                        path: 'size_id',
+                        select: 'size'
                     }
                 ]
             });
@@ -69,12 +80,12 @@ export const addToCart = async (req, res) => {
         const messages = [];
 
         for (const item of items) {
-            const { variant_id, selected_size, quantity = 1 } = item;
+            const { variant_id, size_id, quantity = 1 } = item;
 
             // Kiểm tra variant tồn tại
             const variant = await variant_MD.findById(variant_id)
                 .populate('product_id', 'name')
-                .populate('size');
+                .populate('size', 'size');
 
             if (!variant) {
                 messages.push(`Không tìm thấy biến thể sản phẩm`);
@@ -82,7 +93,7 @@ export const addToCart = async (req, res) => {
             }
 
             // Kiểm tra size được chọn có trong mảng size của variant không
-            if (!variant.size.some(s => s._id.toString() === selected_size)) {
+            if (!variant.size.some(s => s._id.toString() === size_id)) {
                 messages.push(`Size không hợp lệ cho sản phẩm ${variant.product_id.name}`);
                 continue;
             }
@@ -103,7 +114,7 @@ export const addToCart = async (req, res) => {
             let existingItem = await cartItem_MD.findOne({
                 cart_id: cart._id,
                 variant_id,
-                selected_size
+                size_id
             });
 
             if (existingItem) {
@@ -119,7 +130,7 @@ export const addToCart = async (req, res) => {
                 const newItem = await cartItem_MD.create({
                     cart_id: cart._id,
                     variant_id,
-                    selected_size,
+                    size_id,
                     quantity
                 });
                 cart.cart_items.push(newItem._id);
