@@ -55,31 +55,6 @@ const authMiddleware = async (req, res, next) => {
         // Gán thông tin user vào request
         req.user = user;
         next();
-        /**
-         * Middleware xác thực không bắt buộc (dùng cho trang công khai, ví dụ: liên hệ)
-         * - Nếu có token hợp lệ → gán req.user
-         * - Nếu không có token hoặc token sai → vẫn tiếp tục mà không gán req.user
-         */
-        authMiddleware.optional = async (req, res, next) => {
-            try {
-                const token = req.headers['authorization']?.split(' ')[1];
-                if (!token) return next(); // Không có token thì bỏ qua
-
-                // Kiểm tra blacklist
-                if (tokenBlacklist.includes(token)) return next();
-
-                // Giải mã token
-                const decoded = jwt.verify(token, process.env.KEY_SECRET);
-
-                // Tìm user
-                const user = await user_MD.findById(decoded.userId).select("-password");
-                if (user) req.user = user;
-            } catch (error) {
-                // Nếu token không hợp lệ hoặc lỗi → bỏ qua, không gán req.user
-            }
-
-            next();
-        };
     } catch (error) {
         // Xử lý các lỗi liên quan đến token
         if (error.name === 'JsonWebTokenError') {
