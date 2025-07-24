@@ -2,7 +2,6 @@ import Product from "../models/product_MD";
 import Order from "../models/order_MD";
 import OrderItem from "../models/orderItem_MD";
 import User from "../models/auth_MD";
-import mongoose from "mongoose";
 
 // Get dashboard statistics
 export const getDashboardStats = async (req, res) => {
@@ -28,8 +27,18 @@ export const getDashboardStats = async (req, res) => {
             }
         ]);
 
-        // Get top selling products (dựa vào OrderItem)
+        // Chỉ lấy OrderItem thuộc đơn hàng đã giao (delivered)
+        // Trước tiên lấy danh sách order_id đã giao
+        const deliveredOrders = await Order.find({ status: 'delivered' }).select('_id');
+        const deliveredOrderIds = deliveredOrders.map(o => o._id);
+
+        // Lấy top sản phẩm bán chạy từ các OrderItem thuộc đơn hàng đã giao
         const topProducts = await OrderItem.aggregate([
+            {
+                $match: {
+                    order_id: { $in: deliveredOrderIds }
+                }
+            },
             {
                 $group: {
                     _id: "$product_id",
@@ -113,10 +122,20 @@ export const getDashboardStats = async (req, res) => {
             cur.setDate(cur.getDate() + 1);
         }
 
-        // Dữ liệu ảo cho doanh thu tháng
-        const mockOrders = {
-            monthlyRevenue: 125000000
-        };
+
+        // Tính doanh thu tháng thực tế chỉ từ đơn hàng đã giao
+        let monthlyRevenue = 0;
+        if (deliveredOrderIds.length > 0) {
+            // Lấy các đơn hàng đã giao trong tháng hiện tại
+            const now = new Date();
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+            const deliveredOrdersThisMonth = await Order.find({
+                status: 'delivered',
+                createdAt: { $gte: firstDay, $lte: lastDay }
+            }).select('_id total_price');
+            monthlyRevenue = deliveredOrdersThisMonth.reduce((sum, o) => sum + (o.total_price || 0), 0);
+        }
 
         res.json({
             success: true,
@@ -127,7 +146,7 @@ export const getDashboardStats = async (req, res) => {
                 totalOrders,
                 totalUsers,
                 ordersByDate,
-                ...mockOrders
+                monthlyRevenue
             }
         });
 
