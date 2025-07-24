@@ -266,36 +266,6 @@ export const createOrder = async (req, res) => {
     }
 }
 
-export const getAllOrders = async (req, res) => {
-    try {
-        const orders = await Order_MD.find({})
-            .populate("user_id", "username email") // Lấy tên và email người đặt hàng
-            .populate("cart_id") // Nếu muốn lấy thêm giỏ hàng
-            .populate({
-                path: "items", // Virtual field từ schema
-                populate: [
-                    {
-                        path: "product_id",
-                        select: "name"
-                    },
-                    {
-                        path: "variant_id",
-                        select: "color size price"
-                    }
-                ]
-            })
-            .sort({ createdAt: -1 }); // Sắp xếp mới nhất trước
-
-        return res.status(200).json(orders);
-    } catch (error) {
-        console.error("Lỗi khi lấy danh sách đơn hàng:", error);
-        return res.status(500).json({
-            message: "Lỗi server khi lấy danh sách đơn hàng",
-            error: error.message
-        });
-    }
-};
-
 // lấy tất cả đơn hàng
 export const getAllOrderUser = async (req, res) => {
     // Kiểm tra người dùng đã đăng nhập chưa

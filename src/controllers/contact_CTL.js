@@ -43,7 +43,7 @@ export const createContact = async (req, res) => {
 
 export const getAllContacts = async (req, res) => {
   try {
-    const contacts = await contact_MD.find().sort({ createdAt: -1 }); 
+    const contacts = await contact_MD.find().populate('userId', 'username email phone address').sort({ createdAt: -1 }); 
     res.status(200).json({ message: "Danh sách liên hệ", data: contacts });
   } catch (error) {
     console.error("Lỗi khi lấy danh sách liên hệ:", error);
