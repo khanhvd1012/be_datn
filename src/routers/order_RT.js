@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createOrder, getOrders, getOrderById, updateOrderStatus, cancelOrder, getAllOrderUser, getAllOrderAdmin } from "../controllers/order_CTL";
+import { createOrder, getOrderById, updateOrderStatus, cancelOrder, getAllOrderUser, getAllOrderAdmin } from "../controllers/order_CTL";
 import authMiddleware from "../middleware/auth_MID";
 import checkRole from "../middleware/checkRole_MID";
 import { ROLES } from "../config/roles";

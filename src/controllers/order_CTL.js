@@ -16,14 +16,26 @@ export const getAllOrderAdmin = async (req, res) => {
         const orders = await Order_MD.find()
             .populate({
                 path: 'items',
-                populate: {
-                    path: 'variant_id',
-                    select: 'sku price color size',
-                    populate: {
-                        path: 'product_id',
-                        select: 'name'
+                populate: [
+                    {
+                        path: 'variant_id',
+                        select: 'sku price color',
+                        populate: [
+                            {
+                                path: 'product_id',
+                                select: 'name'
+                            },
+                            {
+                                path: 'color',
+                                select: 'name',
+                            }
+                        ]
+                    },
+                    {
+                        path: 'size_id',
+                        select: 'size'
                     }
-                }
+                ]
             });
         return res.status(200).json({
             message: 'Lấy danh sách đơn hàng thành công',
@@ -46,14 +58,14 @@ export const createOrder = async (req, res) => {
         }
 
         const user_id = req.user._id;
-        const { 
-            cart_id, 
-            voucher_code, 
+        const {
+            cart_id,
+            voucher_code,
             shipping_address_id, // ID của địa chỉ có sẵn trong profile
             shipping_address, // Địa chỉ mới (nếu không dùng địa chỉ có sẵn)
-            full_name, 
-            phone, 
-            payment_method 
+            full_name,
+            phone,
+            payment_method,
         } = req.body;
 
         if (!cart_id) {
@@ -75,7 +87,7 @@ export const createOrder = async (req, res) => {
                 return res.status(404).json({ message: "Không tìm thấy địa chỉ giao hàng đã chọn" });
             }
             fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}`;
-        } 
+        }
         // Nếu không có shipping_address_id, yêu cầu thông tin địa chỉ mới
         else {
             if (!shipping_address || !full_name || !phone) {
@@ -175,7 +187,7 @@ export const createOrder = async (req, res) => {
         let total_price = sub_total;
 
         if (voucher_code) {
-            voucher = await Voucher_MD.findOne({ 
+            voucher = await Voucher_MD.findOne({
                 code: voucher_code.toUpperCase(),
                 isActive: true,
                 startDate: { $lte: new Date() },
@@ -189,8 +201,8 @@ export const createOrder = async (req, res) => {
 
             // Kiểm tra điều kiện áp dụng voucher
             if (sub_total < voucher.minOrderValue) {
-                return res.status(400).json({ 
-                    message: `Giá trị đơn hàng tối thiểu để sử dụng voucher là ${voucher.minOrderValue.toLocaleString('vi-VN')}đ` 
+                return res.status(400).json({
+                    message: `Giá trị đơn hàng tối thiểu để sử dụng voucher là ${voucher.minOrderValue.toLocaleString('vi-VN')}đ`
                 });
             }
 
@@ -233,6 +245,7 @@ export const createOrder = async (req, res) => {
                 variant_id: item.variant_id._id,
                 quantity: item.quantity,
                 price: item.variant_id.price,
+                size_id: item.size_id
             }
 
             orderItemData.push(orderItem);
@@ -241,6 +254,22 @@ export const createOrder = async (req, res) => {
         // tạo đơn hàng item
         const orderItems = await OrderItem_MD.insertMany(orderItemData);
 
+        const adminAndStaff = await User_MD.find({
+            role: { $in: ['admin', 'employee'] }
+        });
+
+        for (const adminUser of adminAndStaff) {
+            await Notification.create({
+                user_id: adminUser._id,
+                title: 'Đơn hàng mới',
+                message: `Có đơn hàng mới từ khách hàng ${user.username || user.email}`,
+                type: 'new_order',
+                data: {
+                    order_id: order._id,
+                    user_id: user_id
+                }
+            });
+        }
         // xóa giỏ hàng
         await CartItem_MD.deleteMany({ cart_id });
         await Cart_MD.findByIdAndUpdate(cart_id, { cart_items: [] });
@@ -266,36 +295,6 @@ export const createOrder = async (req, res) => {
     }
 }
 
-export const getAllOrders = async (req, res) => {
-    try {
-        const orders = await Order_MD.find({})
-            .populate("user_id", "username email") // Lấy tên và email người đặt hàng
-            .populate("cart_id") // Nếu muốn lấy thêm giỏ hàng
-            .populate({
-                path: "items", // Virtual field từ schema
-                populate: [
-                    {
-                        path: "product_id",
-                        select: "name"
-                    },
-                    {
-                        path: "variant_id",
-                        select: "color size price"
-                    }
-                ]
-            })
-            .sort({ createdAt: -1 }); // Sắp xếp mới nhất trước
-
-        return res.status(200).json(orders);
-    } catch (error) {
-        console.error("Lỗi khi lấy danh sách đơn hàng:", error);
-        return res.status(500).json({
-            message: "Lỗi server khi lấy danh sách đơn hàng",
-            error: error.message
-        });
-    }
-};
-
 // lấy tất cả đơn hàng
 export const getAllOrderUser = async (req, res) => {
     // Kiểm tra người dùng đã đăng nhập chưa
@@ -308,6 +307,29 @@ export const getAllOrderUser = async (req, res) => {
         // Lấy tất cả đơn hàng của người dùng
         const orders = await Order_MD.find({ user_id: req.user._id })
             .populate("user_id", "username email")
+            .populate({
+                path: 'items',
+                populate: [
+                    {
+                        path: 'variant_id',
+                        select: 'sku price color',
+                        populate: [
+                            {
+                                path: 'product_id',
+                                select: 'name'
+                            },
+                            {
+                                path: 'color',
+                                select: 'name',
+                            }
+                        ]
+                    },
+                    {
+                        path: 'size_id',
+                        select: 'size'
+                    }
+                ]
+            })
             .sort({ createdAt: -1 });
 
         return res.status(200).json(orders);
@@ -334,7 +356,15 @@ export const getOrderById = async (req, res) => {
                     },
                     {
                         path: "variant_id",
-                        select: "price color size"
+                        select: "price image",
+                        populate: {
+                            path: "color",
+                            select: "name"
+                        }
+                    },
+                    {
+                        path: "size_id",
+                        select: "size"
                     }
                 ]
             });
@@ -440,12 +470,48 @@ export const updateOrderStatus = async (req, res) => {
 
         // Tạo thông báo cho khách hàng về trạng thái đơn hàng
         await Notification.create({
-            user_id: order.user_id,
+            user_id: order.user_id.toString(), // Đảm bảo convert sang string
             title: 'Cập nhật trạng thái đơn hàng',
-            message: `Đơn hàng của bạn đã chuyển sang trạng thái: ${status}`,
+            message: `Đơn hàng #${order._id} của bạn đã chuyển sang trạng thái: ${getStatusText(status)}`,
             type: 'order_status',
-            data: {},
+            data: {
+                order_id: order._id,
+                status: status,
+                updated_at: new Date()
+            },
         });
+
+        // Hàm helper để chuyển đổi status thành text dễ đọc
+        function getStatusText(status) {
+            const statusMap = {
+                'pending': 'Chờ xử lý',
+                'processing': 'Đang xử lý',
+                'shipped': 'Đang giao hàng',
+                'delivered': 'Đã giao hàng',
+                'canceled': 'Đã hủy'
+            };
+            return statusMap[status] || status;
+        }
+
+        // Tạo thông báo cho admin và nhân viên về việc cập nhật trạng thái
+        const adminAndStaffForUpdate = await User_MD.find({
+            role: { $in: ['admin', 'employee'] }
+        });
+
+        for (const adminUser of adminAndStaffForUpdate) {
+            await Notification.create({
+                user_id: adminUser._id,
+                title: 'Cập nhật trạng thái đơn hàng',
+                message: `Đơn hàng #${order._id} đã được cập nhật sang trạng thái: ${getStatusText(status)}`,
+                type: 'order_status',
+                data: {
+                    order_id: order._id,
+                    status: status,
+                    updated_by: req.user._id,
+                    customer_id: order.user_id
+                }
+            });
+        }
 
         return res.status(200).json(order);
     } catch (error) {
@@ -482,17 +548,17 @@ export const cancelOrder = async (req, res) => {
         // User chỉ có thể hủy đơn ở trạng thái 'pending' và 'processing'
         const nonCancelableStatus = isAdmin ? ["delivered", "canceled"] : ["shipped", "delivered", "canceled"];
         if (nonCancelableStatus.includes(order.status)) {
-            return res.status(400).json({ 
-                message: isAdmin 
+            return res.status(400).json({
+                message: isAdmin
                     ? "Không thể hủy đơn hàng đã giao hoặc đã hủy"
-                    : "Không thể hủy đơn hàng trong trạng thái hiện tại" 
+                    : "Không thể hủy đơn hàng trong trạng thái hiện tại"
             });
         }
 
         // Hoàn lại số lượng cho kho nếu đơn hàng đã shipped
         if (order.status === 'shipped' && isAdmin) {
             const orderItems = await OrderItem_MD.find({ order_id: orderId });
-            
+
             for (const item of orderItems) {
                 const stock = await Stock_MD.findOneAndUpdate(
                     { product_variant_id: item.variant_id },
@@ -529,18 +595,42 @@ export const cancelOrder = async (req, res) => {
 
         // Tạo thông báo cho khách hàng
         await Notification.create({
-            user_id: order.user_id,
+            user_id: order.user_id.toString(), // Đảm bảo convert sang string
             title: 'Đơn hàng đã bị hủy',
-            message: isAdmin 
-                ? `Đơn hàng của bạn đã bị hủy bởi Admin với lý do: ${req.body.cancel_reason || 'Không có lý do'}`
-                : `Đơn hàng của bạn đã bị hủy thành công`,
+            message: isAdmin
+                ? `Đơn hàng #${orderId} của bạn đã bị hủy bởi Admin. Lý do: ${req.body.cancel_reason || 'Không có lý do'}`
+                : `Đơn hàng #${orderId} của bạn đã bị hủy thành công`,
             type: 'order_status',
             data: {
                 order_id: orderId,
                 status: 'canceled',
-                canceled_by: isAdmin ? 'admin' : 'user'
+                canceled_by: isAdmin ? 'admin' : 'user',
+                cancel_reason: req.body.cancel_reason,
+                cancelled_at: new Date()
             },
         });
+
+        // Tạo thông báo cho admin và nhân viên về việc hủy đơn hàng (chỉ khi user hủy)
+        if (!isAdmin) {
+            const adminAndStaffForCancel = await User_MD.find({
+                role: { $in: ['admin', 'employee'] }
+            });
+
+            for (const adminUser of adminAndStaffForCancel) {
+                await Notification.create({
+                    user_id: adminUser._id,
+                    title: 'Đơn hàng bị hủy',
+                    message: `Khách hàng đã hủy đơn hàng #${orderId}. Lý do: ${req.body.cancel_reason || 'Không có lý do'}`,
+                    type: 'order_cancelled',
+                    data: {
+                        order_id: orderId,
+                        cancelled_by: 'user',
+                        cancel_reason: req.body.cancel_reason,
+                        customer_id: order.user_id
+                    }
+                });
+            }
+        }
 
         return res.status(200).json({
             message: "Đơn hàng đã được hủy thành công",
