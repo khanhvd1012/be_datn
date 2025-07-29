@@ -8,6 +8,13 @@ import Variant_MD from "../models/variant_MD";
 import Voucher_MD from "../models/voucher_MD";
 import User_MD from "../models/auth_MD";
 import Notification from "../models/notification_MD";
+import moment from 'moment';
+import dateFormat from 'dateformat';
+import querystring from 'qs';
+import crypto from 'crypto';
+import axios from "axios";
+
+
 
 // tạo đơn hàng
 export const getAllOrderAdmin = async (req, res) => {
@@ -46,14 +53,14 @@ export const createOrder = async (req, res) => {
         }
 
         const user_id = req.user._id;
-        const { 
-            cart_id, 
-            voucher_code, 
+        const {
+            cart_id,
+            voucher_code,
             shipping_address_id, // ID của địa chỉ có sẵn trong profile
             shipping_address, // Địa chỉ mới (nếu không dùng địa chỉ có sẵn)
-            full_name, 
-            phone, 
-            payment_method 
+            full_name,
+            phone,
+            payment_method
         } = req.body;
 
         if (!cart_id) {
@@ -75,7 +82,7 @@ export const createOrder = async (req, res) => {
                 return res.status(404).json({ message: "Không tìm thấy địa chỉ giao hàng đã chọn" });
             }
             fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}`;
-        } 
+        }
         // Nếu không có shipping_address_id, yêu cầu thông tin địa chỉ mới
         else {
             if (!shipping_address || !full_name || !phone) {
@@ -175,7 +182,7 @@ export const createOrder = async (req, res) => {
         let total_price = sub_total;
 
         if (voucher_code) {
-            voucher = await Voucher_MD.findOne({ 
+            voucher = await Voucher_MD.findOne({
                 code: voucher_code.toUpperCase(),
                 isActive: true,
                 startDate: { $lte: new Date() },
@@ -189,8 +196,8 @@ export const createOrder = async (req, res) => {
 
             // Kiểm tra điều kiện áp dụng voucher
             if (sub_total < voucher.minOrderValue) {
-                return res.status(400).json({ 
-                    message: `Giá trị đơn hàng tối thiểu để sử dụng voucher là ${voucher.minOrderValue.toLocaleString('vi-VN')}đ` 
+                return res.status(400).json({
+                    message: `Giá trị đơn hàng tối thiểu để sử dụng voucher là ${voucher.minOrderValue.toLocaleString('vi-VN')}đ`
                 });
             }
 
@@ -240,6 +247,33 @@ export const createOrder = async (req, res) => {
 
         // tạo đơn hàng item
         const orderItems = await OrderItem_MD.insertMany(orderItemData);
+
+        if (payment_method === "VNPAY") {
+            // Gọi API tạo payment URL
+            const response = await axios.get(`http://localhost:3000/api/orders/create-payment?amount=${total_price}&orderId=${order._id}`, {
+                headers: {
+                    Authorization: req.headers.authorization // giữ token để qua authMiddleware
+                }
+            });
+
+            if (response.data?.paymentUrl) {
+                return res.status(201).json({
+                    redirectUrl: response.data.paymentUrl, // để client redirect tới đây
+                    message: "Đơn hàng đã được tạo. Đang chuyển hướng đến VNPAY.",
+                    donHang: {
+                        ...order.toObject(),
+                        chiTietDonHang: orderItems,
+                        tongGoc: sub_total,
+                        giamGia: voucher_discount,
+                        tongThanhToan: total_price
+                    }
+                });
+            } else {
+                return res.status(500).json({
+                    message: "Không thể tạo liên kết thanh toán VNPAY"
+                });
+            }
+        }
 
         // xóa giỏ hàng
         await CartItem_MD.deleteMany({ cart_id });
@@ -452,17 +486,17 @@ export const cancelOrder = async (req, res) => {
         // User chỉ có thể hủy đơn ở trạng thái 'pending' và 'processing'
         const nonCancelableStatus = isAdmin ? ["delivered", "canceled"] : ["shipped", "delivered", "canceled"];
         if (nonCancelableStatus.includes(order.status)) {
-            return res.status(400).json({ 
-                message: isAdmin 
+            return res.status(400).json({
+                message: isAdmin
                     ? "Không thể hủy đơn hàng đã giao hoặc đã hủy"
-                    : "Không thể hủy đơn hàng trong trạng thái hiện tại" 
+                    : "Không thể hủy đơn hàng trong trạng thái hiện tại"
             });
         }
 
         // Hoàn lại số lượng cho kho nếu đơn hàng đã shipped
         if (order.status === 'shipped' && isAdmin) {
             const orderItems = await OrderItem_MD.find({ order_id: orderId });
-            
+
             for (const item of orderItems) {
                 const stock = await Stock_MD.findOneAndUpdate(
                     { product_variant_id: item.variant_id },
@@ -501,7 +535,7 @@ export const cancelOrder = async (req, res) => {
         await Notification.create({
             user_id: order.user_id,
             title: 'Đơn hàng đã bị hủy',
-            message: isAdmin 
+            message: isAdmin
                 ? `Đơn hàng của bạn đã bị hủy bởi Admin với lý do: ${req.body.cancel_reason || 'Không có lý do'}`
                 : `Đơn hàng của bạn đã bị hủy thành công`,
             type: 'order_status',
@@ -525,3 +559,66 @@ export const cancelOrder = async (req, res) => {
         });
     }
 }
+
+export const createVNPAYPayment = async (req, res) => {
+    const { amount, orderId } = req.query;
+
+    if (!amount || !orderId) {
+        return res.status(400).json({ message: "Thiếu thông tin thanh toán" });
+    }
+
+    const vnp_TmnCode = "MTV05YVA"; // mã TMN VNPAY
+    const vnp_HashSecret = "PBNLKF8YGRNCPXLDJLY9V1023CW8206U";
+    const vnp_Url = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
+    const vnp_ReturnUrl = `http://localhost:5173/payment-result?orderId=${orderId}`;
+
+    const ipAddr = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
+    const tmnCode = vnp_TmnCode;
+    const secretKey = vnp_HashSecret;
+    const vnpUrl = vnp_Url;
+    const returnUrl = vnp_ReturnUrl;
+
+    const vnp_TxnRef = dateFormat(new Date(), "yyyymmddHHMMss");
+    const vnp_OrderInfo = `Thanh toán đơn hàng ${orderId}`;
+    const vnp_OrderType = "other";
+    const vnp_Amount = amount * 100;
+    const vnp_Locale = "vn";
+    const vnp_BankCode = "";
+    const vnp_CreateDate = moment().format('YYYYMMDDHHmmss');
+
+    let vnp_Params = {
+        vnp_Version: "2.1.0",
+        vnp_Command: "pay",
+        vnp_TmnCode: tmnCode,
+        vnp_Locale,
+        vnp_CurrCode: "VND",
+        vnp_TxnRef,
+        vnp_OrderInfo,
+        vnp_OrderType,
+        vnp_Amount,
+        vnp_ReturnUrl: returnUrl,
+        vnp_IpAddr: ipAddr,
+        vnp_CreateDate
+    };
+
+    const sortObject = (obj) => {
+        const sorted = {};
+        const keys = Object.keys(obj).sort();
+        keys.forEach((key) => {
+            sorted[key] = obj[key];
+        });
+        return sorted;
+    };
+
+    vnp_Params = sortObject(vnp_Params);
+
+    const signData = querystring.stringify(vnp_Params, { encode: false });
+    const hmac = crypto.createHmac("sha512", secretKey);
+    const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
+
+    vnp_Params.vnp_SecureHash = signed;
+    const paymentUrl = vnpUrl + '?' + querystring.stringify(vnp_Params, { encode: true });
+
+    return res.json({ paymentUrl });
+};
