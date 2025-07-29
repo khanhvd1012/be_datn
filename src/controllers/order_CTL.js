@@ -14,8 +14,6 @@ import querystring from 'qs';
 import crypto from 'crypto';
 import axios from "axios";
 
-
-
 // tạo đơn hàng
 export const getAllOrderAdmin = async (req, res) => {
     try {
@@ -563,8 +561,8 @@ export const cancelOrder = async (req, res) => {
 export const createVNPAYPayment = async (req, res) => {
     const { amount, orderId } = req.query;
 
-    if (!amount || !orderId) {
-        return res.status(400).json({ message: "Thiếu thông tin thanh toán" });
+    if (!amount || !orderId || isNaN(amount)) {
+        return res.status(400).json({ message: "Thiếu hoặc sai thông tin thanh toán" });
     }
 
     const vnp_TmnCode = "MTV05YVA"; // mã TMN VNPAY
