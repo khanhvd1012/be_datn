@@ -735,6 +735,7 @@ export const zaloPayCallback = async (req, res) => {
         // Cập nhật trạng thái thanh toán
         if (order.payment_status !== "paid") {
             order.payment_status = "paid";
+            order.status = "processing"; 
             order.transaction_id = zp_trans_id;
             await order.save();
         }
