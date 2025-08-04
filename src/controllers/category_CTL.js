@@ -3,7 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import category_MD from "../models/category_MD";
 import product_MD from "../models/product_MD";
-import brand_MD from "../models/brand_MD";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,7 +11,6 @@ const __dirname = path.dirname(__filename);
 export const getAllCategories = async (req, res) => {
     try {
         const categories = await category_MD.find()
-            .populate({ path: "brand", select: "name" })
             .sort({ createdAt: -1 });
 
         res.status(200).json(categories);
@@ -28,13 +26,9 @@ export const getCategoryById = async (req, res) => {
         const category = await category_MD.findById(req.params.id)
             .populate({
                 path: 'products',
-                select: 'name description price images category brand status quantity',
+                select: 'name description price images category  status quantity',
                 model: product_MD
             })
-            .populate({
-                path: "brand",
-                select: "name",
-            });
 
         if (!category) {
             return res.status(404).json({ message: 'Danh mục không tồn tại' });
@@ -54,21 +48,10 @@ export const createCategory = async (req, res) => {
             req.body.logo_image = `http://localhost:3000/uploads/${req.file.filename}`;
         }
 
-        // Normalize brand thành mảng
-        if (req.body.brand) {
-            req.body.brand = Array.isArray(req.body.brand) ? req.body.brand : [req.body.brand];
-
-            const validBrands = await brand_MD.find({ _id: { $in: req.body.brand } });
-            if (validBrands.length !== req.body.brand.length) {
-                return res.status(400).json({ message: "Một hoặc nhiều thương hiệu không hợp lệ" });
-            }
-        }
-
         const created = await category_MD.create(req.body);
 
         // Populate brand sau khi tạo
         const newCategory = await category_MD.findById(created._id)
-            .populate({ path: "brand", select: "name" });
 
         res.status(201).json({
             message: 'Tạo danh mục thành công',
@@ -105,15 +88,6 @@ export const updateCategory = async (req, res) => {
                 if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
             }
             req.body.logo_image = `http://localhost:3000/uploads/${req.file.filename}`;
-        }
-
-        // Normalize brand thành mảng
-        if (req.body.brand) {
-            req.body.brand = Array.isArray(req.body.brand) ? req.body.brand : [req.body.brand];
-            const validBrands = await brand_MD.find({ _id: { $in: req.body.brand } });
-            if (validBrands.length !== req.body.brand.length) {
-                return res.status(400).json({ message: "Một hoặc nhiều thương hiệu không hợp lệ" }).populate("brand", "name");
-            }
         }
 
         const updated = await category_MD.findByIdAndUpdate(req.params.id, req.body, { new: true });

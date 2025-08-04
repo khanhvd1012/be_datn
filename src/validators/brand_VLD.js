@@ -20,14 +20,6 @@ const brandSchema = Joi.object({
         'any.required': 'Mô tả thương hiệu là bắt buộc',
     }),
     logo_image: Joi.string().optional(),
-    
-    category: Joi.alternatives().try(
-        Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)),
-        Joi.string().pattern(/^[0-9a-fA-F]{24}$/)
-    ).optional().messages({
-        'string.pattern.base': 'ID danh mục không hợp lệ',
-        'array.includes': 'Danh sách danh mục chứa ID không hợp lệ',
-    }),
 });
 
 export const validateBrand = async (req, res, next) => {
@@ -35,13 +27,6 @@ export const validateBrand = async (req, res, next) => {
         // Gán logo nếu có
         if (req.file) {
             req.body.logo_image = `http://localhost:3000/uploads/${req.file.filename}`;
-        }
-
-        // Chuẩn hóa category nếu là string
-        if (typeof req.body.category === 'string') {
-            req.body.category = [req.body.category];
-        } else if (!Array.isArray(req.body.category)) {
-            req.body.category = [];
         }
 
         // Validate dữ liệu

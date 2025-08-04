@@ -14,16 +14,18 @@ const variantSchema = Joi.object({
     color: Joi.string().required().messages({
         'string.empty': 'Màu sắc không được để trống'
     }),
-    size: Joi.array().items(
-        Joi.string().pattern(/^[0-9a-fA-F]{24}$/).messages({
-            'string.pattern.base': 'Định dạng ID size không hợp lệ',
-            'string.empty': 'Kích thước không được để trống'
-        })
-    ).min(1).required().messages({
-        'array.base': 'Kích thước phải là một mảng',
-        'array.min': 'Phải có ít nhất một size'
+    size: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).messages({
+        'string.pattern.base': 'Định dạng ID size không hợp lệ',
+        'string.empty': 'Kích thước không được để trống'
     }),
     image_url: Joi.array().optional(),
+
+    existingImages: Joi.alternatives()
+        .try(
+            Joi.array().items(Joi.string()),
+            Joi.string()
+        )
+        .optional(),
 
     price: Joi.number().min(0).required().messages({
         'number.base': 'Giá bán phải là số',
@@ -75,10 +77,6 @@ const cartItemSchema = Joi.object({
 
 export const validateVariant = (req, res, next) => {
     try {
-        // Chuẩn hóa size nếu là string
-        if (typeof req.body.size === 'string') {
-            req.body.size = [req.body.size];
-        }
 
         // Chuẩn hóa image_url từ file upload
         if (req.files && Array.isArray(req.files) && req.files.length > 0) {
@@ -88,6 +86,10 @@ export const validateVariant = (req, res, next) => {
         // Nếu image_url là chuỗi (từ client) → chuyển về mảng
         if (typeof req.body.image_url === 'string') {
             req.body.image_url = [req.body.image_url];
+        }
+
+        if (typeof req.body.existingImages === 'string') {
+            req.body.existingImages = [req.body.existingImages];
         }
 
         // Validate với Joi
