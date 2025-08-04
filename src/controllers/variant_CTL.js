@@ -364,12 +364,10 @@ export const deleteVariant = async (req, res) => {
         );
 
         // Xóa variant khỏi tất cả size (nếu size là mảng)
-        if (Array.isArray(variant.size)) {
-            await Size.updateMany(
-                { _id: { $in: variant.size } },
-                { $pull: { variants: variant._id } }
-            );
-        }
+        await Size.findByIdAndUpdate(
+            variant.size,
+            { $pull: { variants: variant._id } }
+        );
 
         // Xóa stock và stock history liên quan
         const stock = await Stock.findOne({ product_variant_id: variant._id });

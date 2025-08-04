@@ -3,12 +3,61 @@ import Product from "../models/product_MD";
 import Category from "../models/category_MD";
 import Brand from "../models/brand_MD";
 import Variant from "../models/variant_MD";
+import Notification from "../models/notification_MD";
+import User from "../models/auth_MD";
 import { AppError } from "../middleware/errorHandler_MID";
 import Order from "../models/order_MD";
 import slugify from 'slugify';
 import Review from "../models/review_MD";
 import orderItem_MD from '../models/orderItem_MD';
 import Stock from "../models/stock_MD";
+import { setProductTimeout, clearProductTimeout } from '../middleware/timeoutRegistry_MID';
+
+/**
+ * Gửi thông báo sản phẩm mới cho tất cả admin
+ * @param {Object} product - Thông tin sản phẩm vừa tạo
+ */
+const sendNewProductNotificationToAdmins = async (product) => {
+    try {
+        // Lấy danh sách tất cả admin
+        const admins = await User.find({ 
+            $or: [
+                { role: 'admin' }
+            ]
+        });
+        
+        if (admins.length === 0) {
+            console.log('Không tìm thấy admin nào để gửi thông báo');
+            return;
+        }
+
+        // Tạo thông báo cho từng admin
+        const notifications = admins.map(admin => ({
+            user_id: admin._id.toString(),
+            title: 'Sản phẩm mới đã được tạo! 📦',
+            message: `Sản phẩm "${product.name}" đã được thêm vào hệ thống. Hãy kiểm tra và cập nhật thông tin nếu cần thiết.`,
+            type: 'product_new_admin',
+            data: {
+                product_id: product._id,
+                product_name: product.name,
+                product_slug: product.slug,
+                category: product.category?.name || 'Chưa có danh mục',
+                brand: product.brand?.name || 'Chưa có thương hiệu',
+                created_at: new Date()
+            },
+            is_read: false,
+            created_at: new Date()
+        }));
+
+        // Bulk insert để tối ưu performance
+        await Notification.insertMany(notifications);
+        console.log(`Đã gửi thông báo sản phẩm mới "${product.name}" cho ${admins.length} admin(s)`);
+        
+    } catch (error) {
+        console.error('Lỗi khi gửi thông báo sản phẩm mới cho admin:', error);
+        // Không throw error để không ảnh hưởng đến việc tạo sản phẩm
+    }
+};
 
 /**
  * Controller lấy danh sách tất cả sản phẩm
@@ -84,11 +133,12 @@ export const getOneProduct = async (req, res, next) => {
 };
 
 /**
- * Controller tạo sản phẩm mới
+ * Controller tạo sản phẩm mới và gửi thông báo cho admin
  * @description
  * - Kiểm tra category và brand tồn tại
  * - Tạo sản phẩm mới với thông tin từ request body
  * - Cập nhật danh sách sản phẩm trong category và brand tương ứng
+ * - Tự động gửi thông báo cho tất cả admin
  * - Trả về thông tin sản phẩm vừa tạo
  */
 export const createProduct = async (req, res, next) => {
@@ -117,7 +167,7 @@ export const createProduct = async (req, res, next) => {
 
         const product = await Product.create({
             name: req.body.name,
-            slug, // thêm dòng này
+            slug,
             description: req.body.description,
             brand: brand._id,
             category: category._id,
@@ -138,11 +188,32 @@ export const createProduct = async (req, res, next) => {
         // Populate thông tin category và brand
         const populatedProduct = await Product.findById(product._id)
             .populate('category', 'name')
-            .populate('brand', 'name')
+            .populate('brand', 'name');
+
+        // Gửi thông báo cho admin ngay sau khi tạo sản phẩm thành công
+        
+        // Chạy bất đồng bộ để không ảnh hưởng đến response time
+        setImmediate(async () => {
+            await sendNewProductNotificationToAdmins({
+                ...populatedProduct.toObject(),
+                category: { name: category.name },
+                brand: { name: brand.name }
+            });
+        });
+
+        // Gửi thông báo cho khách hàng sau 1 giờ
+
+        const timeoutId = setTimeout(async () => {
+            await sendNewProductNotificationToCustomers({
+                ...populatedProduct.toObject()
+            });
+        }, 36000); // 1 giờ
+        
+        setProductTimeout(product._id, timeoutId);
 
         return res.status(201).json({
             success: true,
-            message: 'Tạo sản phẩm thành công',
+            message: 'Tạo sản phẩm thành công. Thông báo đã được gửi đến admin.',
             data: populatedProduct
         });
     } catch (error) {
@@ -269,9 +340,8 @@ export const removeProduct = async (req, res, next) => {
                 { $pull: { products: product._id } }
             )
         ]);
-
-        // Xóa tất cả biến thể của sản phẩm
-        await Variant.deleteMany({ product_id: product._id });
+        // Xóa timeout cho sản phẩm
+        clearProductTimeout(product._id);
 
         // Xóa sản phẩm
         await Product.deleteOne({ _id: product._id });
@@ -316,6 +386,9 @@ export const getProductVariants = async (req, res, next) => {
     }
 };
 
+/**
+ * Controller lấy sản phẩm theo slug
+ */
 export const getProductBySlug = async (req, res) => {
     try {
         const product = await Product.findOne({ slug: req.params.slug })
@@ -357,5 +430,33 @@ export const getProductBySlug = async (req, res) => {
             message: 'Lỗi máy chủ',
             error: error.message
         });
+    }
+};
+
+const sendNewProductNotificationToCustomers = async (product) => {
+    try {
+        const customers = await User.find({ role: 'user' }); // hoặc lọc theo điều kiện phù hợp
+
+        if (customers.length === 0) return;
+
+        const notifications = customers.map(user => ({
+            user_id: user._id.toString(),
+            title: 'Sản phẩm mới đã ra mắt! 🎉',
+            message: `Khám phá sản phẩm mới "${product.name}" ngay hôm nay!`,
+            type: 'product_new_user',
+            data: {
+                product_id: product._id,
+                product_name: product.name,
+                product_slug: product.slug,
+                created_at: new Date()
+            },
+            is_read: false,
+            created_at: new Date()
+        }));
+
+        await Notification.insertMany(notifications);
+        console.log(`Đã gửi thông báo sản phẩm mới "${product.name}" cho ${customers.length} khách hàng`);
+    } catch (error) {
+        console.error('Lỗi khi gửi thông báo sản phẩm mới cho khách hàng:', error);
     }
 };
