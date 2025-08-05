@@ -16,6 +16,10 @@ const userSchema = new mongoose.Schema(
         image: { type: String, default: "" }, 
         shipping_addresses: [shippingAddressSchema],
         role: { type: String, enum: ["user", "employee", "admin"], default: "user" },
+        auto_restore_cart: {
+            type: Boolean,
+            default: true
+        }
     },
     { timestamps: true }
 );

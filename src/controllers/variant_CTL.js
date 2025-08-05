@@ -155,42 +155,50 @@ export const updateVariant = async (req, res) => {
             return res.status(404).json({ message: 'Không tìm thấy biến thể' });
         }
 
-        if (req.files && req.files.length > 0) {
-            // Xoá ảnh cũ trong thư mục uploads
-            if (currentVariant.image_url && currentVariant.image_url.length > 0) {
-                for (const url of currentVariant.image_url) {
-                    const filename = url.split('/uploads/')[1];
-                    const filepath = path.join(__dirname, '../../public/uploads', filename);
-                    if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
-                }
+        let imageUrls = [...(currentVariant.image_url || [])]; // mặc định giữ ảnh cũ
+
+        // Nếu client gửi existingImages => chỉ giữ lại đúng các ảnh đó
+        if (req.body.existingImages) {
+            if (typeof req.body.existingImages === 'string') {
+                imageUrls = [req.body.existingImages];
+            } else if (Array.isArray(req.body.existingImages)) {
+                imageUrls = req.body.existingImages;
             }
 
-            // Tạo mảng URL ảnh mới
-            const newImages = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
-            req.body.image_url = newImages;
+            // Xoá ảnh không còn giữ lại
+            const removedImages = (currentVariant.image_url || []).filter(
+                oldUrl => !imageUrls.includes(oldUrl)
+            );
+            deleteUploadedImages(removedImages);
         }
+
+        // Nếu có ảnh mới, thêm vào
+        if (req.files && req.files.length > 0) {
+            const newImages = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+            imageUrls = [...imageUrls, ...newImages];
+        }
+
+        req.body.image_url = imageUrls;
+        delete req.body.existingImages;
 
         // Nếu có thay đổi màu sắc hoặc kích thước, cần tạo SKU mới
         if (req.body.color || req.body.size) {
-            // Lấy thông tin sản phẩm
             const product = await product_MD.findById(currentVariant.product_id);
             if (!product) {
                 return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
             }
 
-            // Kiểm tra trùng lặp biến thể
             const existingVariant = await variant_MD.findOne({
                 product_id: currentVariant.product_id,
                 color: req.body.color || currentVariant.color,
                 size: req.body.size || currentVariant.size,
-                _id: { $ne: currentVariant._id } // Loại trừ variant hiện tại
+                _id: { $ne: currentVariant._id }
             });
 
             if (existingVariant) {
                 return res.status(400).json({ message: 'Biến thể với màu sắc và kích thước này đã tồn tại' });
             }
 
-            // Tạo SKU mới (phải await)
             const sku = await generateSKU(product, {
                 color: req.body.color || currentVariant.color,
                 size: req.body.size || currentVariant.size
@@ -202,7 +210,6 @@ export const updateVariant = async (req, res) => {
                 sku: sku
             };
 
-            // Cập nhật variant với SKU mới
             const updatedVariant = await variant_MD.findByIdAndUpdate(
                 req.params.id,
                 newVariant,
@@ -215,7 +222,7 @@ export const updateVariant = async (req, res) => {
             });
         }
 
-        // Nếu không thay đổi màu sắc hoặc kích thước, chỉ cập nhật các thông tin khác
+        // Nếu không thay đổi màu hoặc size, chỉ cập nhật thông tin khác
         const updatedVariant = await variant_MD.findByIdAndUpdate(
             req.params.id,
             req.body,
@@ -227,18 +234,17 @@ export const updateVariant = async (req, res) => {
             data: updatedVariant
         });
     } catch (error) {
-        // Xóa ảnh nếu có
         if (req.files && req.files.length > 0) {
             deleteUploadedImages(req.files);
         }
         console.error('Lỗi khi cập nhật biến thể:', error);
-
         return res.status(500).json({
             message: 'Đã xảy ra lỗi khi cập nhật biến thể',
             error: error.message
         });
     }
 };
+
 
 export const getAllVariants = async (req, res) => {
     try {
@@ -364,12 +370,10 @@ export const deleteVariant = async (req, res) => {
         );
 
         // Xóa variant khỏi tất cả size (nếu size là mảng)
-        if (Array.isArray(variant.size)) {
-            await Size.updateMany(
-                { _id: { $in: variant.size } },
-                { $pull: { variants: variant._id } }
-            );
-        }
+        await Size.findByIdAndUpdate(
+            variant.size,
+            { $pull: { variants: variant._id } }
+        );
 
         // Xóa stock và stock history liên quan
         const stock = await Stock.findOne({ product_variant_id: variant._id });

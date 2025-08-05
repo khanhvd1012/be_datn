@@ -334,6 +334,25 @@ export const getAllOrderUser = async (req, res) => {
         // Lấy tất cả đơn hàng của người dùng
         const orders = await Order_MD.find({ user_id: req.user._id })
             .populate("user_id", "username email")
+            .populate({
+                path: 'items',
+                populate: [
+                    {
+                        path: 'variant_id',
+                        select: 'sku price color',
+                        populate: [
+                            {
+                                path: 'product_id',
+                                select: 'name'
+                            },
+                            {
+                                path: 'color',
+                                select: 'name',
+                            }
+                        ]
+                    }
+                ]
+            })
             .sort({ createdAt: -1 });
 
         return res.status(200).json(orders);
@@ -360,7 +379,11 @@ export const getOrderById = async (req, res) => {
                     },
                     {
                         path: "variant_id",
-                        select: "price color size"
+                        select: "price image",
+                        populate: {
+                            path: "color",
+                            select: "name"
+                        }
                     }
                 ]
             });
@@ -466,12 +489,48 @@ export const updateOrderStatus = async (req, res) => {
 
         // Tạo thông báo cho khách hàng về trạng thái đơn hàng
         await Notification.create({
-            user_id: order.user_id,
+            user_id: order.user_id.toString(), // Đảm bảo convert sang string
             title: 'Cập nhật trạng thái đơn hàng',
-            message: `Đơn hàng của bạn đã chuyển sang trạng thái: ${status}`,
+            message: `Đơn hàng #${order._id} của bạn đã chuyển sang trạng thái: ${getStatusText(status)}`,
             type: 'order_status',
-            data: {},
+            data: {
+                order_id: order._id,
+                status: status,
+                updated_at: new Date()
+            },
         });
+
+        // Hàm helper để chuyển đổi status thành text dễ đọc
+        function getStatusText(status) {
+            const statusMap = {
+                'pending': 'Chờ xử lý',
+                'processing': 'Đang xử lý',
+                'shipped': 'Đang giao hàng',
+                'delivered': 'Đã giao hàng',
+                'canceled': 'Đã hủy'
+            };
+            return statusMap[status] || status;
+        }
+
+        // Tạo thông báo cho admin và nhân viên về việc cập nhật trạng thái
+        const adminAndStaffForUpdate = await User_MD.find({
+            role: { $in: ['admin', 'employee'] }
+        });
+
+        for (const adminUser of adminAndStaffForUpdate) {
+            await Notification.create({
+                user_id: adminUser._id,
+                title: 'Cập nhật trạng thái đơn hàng',
+                message: `Đơn hàng #${order._id} đã được cập nhật sang trạng thái: ${getStatusText(status)}`,
+                type: 'order_status',
+                data: {
+                    order_id: order._id,
+                    status: status,
+                    updated_by: req.user._id,
+                    customer_id: order.user_id
+                }
+            });
+        }
 
         return res.status(200).json(order);
     } catch (error) {
@@ -555,7 +614,7 @@ export const cancelOrder = async (req, res) => {
 
         // Tạo thông báo cho khách hàng
         await Notification.create({
-            user_id: order.user_id,
+            user_id: order.user_id.toString(), // Đảm bảo convert sang string
             title: 'Đơn hàng đã bị hủy',
             message: isAdmin
                 ? `Đơn hàng của bạn đã bị hủy bởi Admin với lý do: ${req.body.cancel_reason || 'Không có lý do'}`
@@ -564,9 +623,33 @@ export const cancelOrder = async (req, res) => {
             data: {
                 order_id: orderId,
                 status: 'canceled',
-                canceled_by: isAdmin ? 'admin' : 'user'
+                canceled_by: isAdmin ? 'admin' : 'user',
+                cancel_reason: req.body.cancel_reason,
+                cancelled_at: new Date()
             },
         });
+
+        // Tạo thông báo cho admin và nhân viên về việc hủy đơn hàng (chỉ khi user hủy)
+        if (!isAdmin) {
+            const adminAndStaffForCancel = await User_MD.find({
+                role: { $in: ['admin', 'employee'] }
+            });
+
+            for (const adminUser of adminAndStaffForCancel) {
+                await Notification.create({
+                    user_id: adminUser._id,
+                    title: 'Đơn hàng bị hủy',
+                    message: `Khách hàng đã hủy đơn hàng #${orderId}. Lý do: ${req.body.cancel_reason || 'Không có lý do'}`,
+                    type: 'order_cancelled',
+                    data: {
+                        order_id: orderId,
+                        cancelled_by: 'user',
+                        cancel_reason: req.body.cancel_reason,
+                        customer_id: order.user_id
+                    }
+                });
+            }
+        }
 
         return res.status(200).json({
             message: "Đơn hàng đã được hủy thành công",
