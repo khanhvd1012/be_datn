@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 import brand_MD from "../models/brand_MD";
-import category_MD from "../models/category_MD";
 import Product from "../models/product_MD";
 import fs from 'fs';
 import path from 'path';
@@ -16,25 +15,20 @@ export const getAllBrands = async (req, res) => {
 
         const brandsWithUpdatedCategories = await Promise.all(
             brands.map(async (brand) => {
-                // Tìm các category đang sử dụng brand hiện tại
-                const relatedCategories = await category_MD.find({ brand: brand._id }).select("_id");
 
-                const categoryIds = relatedCategories.map(cat => cat._id);
+                // Cập nhật brand với danh sách  mới
+                await brand_MD.findByIdAndUpdate(brand._id);
 
-                // Cập nhật brand với danh sách category mới
-                await brand_MD.findByIdAndUpdate(brand._id, { category: categoryIds });
-
-                // Trả về brand kèm thông tin category đã populate name
+                // Trả về brand 
                 return {
-                    ...brand.toObject(),
-                    category: await category_MD.find({ _id: { $in: categoryIds } }).select("_id name")
+                    ...brand.toObject()
                 };
             })
         );
 
         res.status(200).json(brandsWithUpdatedCategories);
     } catch (error) {
-        console.error('Lỗi khi cập nhật danh sách category trong brand:', error);
+        console.error('Lỗi khi cập nhật danh sách trong brand:', error);
         res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });
     }
 };
@@ -51,11 +45,7 @@ export const getBrandById = async (req, res) => {
         const brandData = await brand_MD.findById(req.params.id)
             .populate({
                 path: 'products',
-                select: 'name description price images category brand status quantity'
-            })
-            .populate({
-                path: "category",
-                select: "name",
+                select: 'name description price images brand status quantity'
             })
 
         // kiểm tra nếu không tìm thấy thương hiệu
@@ -178,12 +168,6 @@ export const deleteBrand = async (req, res) => {
                 productsCount
             });
         }
-
-        // Xoá brand khỏi tất cả các category đang dùng
-        await category_MD.updateMany(
-            { brand: req.params.id },
-            { $pull: { brand: req.params.id } }
-        );
 
         // Xoá thương hiệu
         await brand_MD.findByIdAndDelete(req.params.id);
