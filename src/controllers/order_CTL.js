@@ -225,7 +225,9 @@ export const createOrder = async (req, res) => {
             sub_total,
             total_price,
             shipping_address: fullShippingAddress,
-            payment_method
+            payment_method,
+            status: payment_method === "COD" ? "processing" : "pending",
+            payment_status: payment_method === "COD" ? "unpaid" : "pending"
         });
 
         const app_trans_id = `${moment().format('YYMMDD')}_${Math.floor(Math.random() * 1000000)}`;
@@ -653,7 +655,9 @@ const config = {
 };
 
 export const createZaloPayPayment = async (amount, orderId, userId) => {
-    const embed_data = {};
+    const embed_data = {
+        redirecturl: "http://localhost:5173/checkout/success" 
+    }; 
     const items = [];
 
     const transID = Math.floor(Math.random() * 1000000);
@@ -735,7 +739,7 @@ export const zaloPayCallback = async (req, res) => {
         // Cập nhật trạng thái thanh toán
         if (order.payment_status !== "paid") {
             order.payment_status = "paid";
-            order.status = "processing"; 
+            order.status = "processing";
             order.transaction_id = zp_trans_id;
             await order.save();
         }
