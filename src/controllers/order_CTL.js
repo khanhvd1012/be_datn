@@ -296,6 +296,22 @@ export const createOrder = async (req, res) => {
                 return res.status(500).json({ message: "Không thể tạo thanh toán ZaloPay", zpResult });
             }
         }
+        const adminAndStaff = await User_MD.find({
+            role: { $in: ['admin', 'employee'] }
+        });
+
+        for (const adminUser of adminAndStaff) {
+            await Notification.create({
+                user_id: adminUser._id,
+                title: 'Đơn hàng mới',
+                message: `Có đơn hàng mới từ khách hàng ${user.username || user.email}`,
+                type: 'new_order',
+                data: {
+                    order_id: order._id,
+                    user_id: user_id
+                }
+            });
+        }
 
         // xóa giỏ hàng
         await CartItem_MD.deleteMany({ cart_id });
@@ -414,53 +430,51 @@ export const updateOrderStatus = async (req, res) => {
             });
         }
 
-        // Định nghĩa thứ tự trạng thái
+        // Thứ tự trạng thái
         const statusOrder = {
             'pending': 0,
             'processing': 1,
             'shipped': 2,
             'delivered': 3,
-            'canceled': 4
+            'returned': 4, // mới thêm
+            'canceled': 5
         };
 
-        // Kiểm tra trạng thái mới có hợp lệ không
+        // Kiểm tra trạng thái mới
         if (!statusOrder.hasOwnProperty(status)) {
             return res.status(400).json({
                 message: "Trạng thái không hợp lệ"
             });
         }
 
-        // Kiểm tra nếu đơn hàng đã bị hủy
+        // Không thay đổi nếu đã hủy
         if (order.status === 'canceled') {
             return res.status(400).json({
                 message: "Không thể thay đổi trạng thái của đơn hàng đã hủy"
             });
         }
 
-        // Kiểm tra nếu đơn hàng đã giao
-        if (order.status === 'delivered') {
+        // Không thay đổi nếu đã hoàn hàng
+        if (order.status === 'returned') {
             return res.status(400).json({
-                message: "Không thể thay đổi trạng thái của đơn hàng đã giao"
+                message: "Đơn hàng đã được hoàn trước đó"
             });
         }
 
-        // Kiểm tra thứ tự trạng thái
-        if (statusOrder[status] <= statusOrder[order.status]) {
+        // Kiểm tra thứ tự trạng thái (trừ khi hoàn hàng)
+        if (status !== 'returned' && statusOrder[status] <= statusOrder[order.status]) {
             return res.status(400).json({
                 message: "Không thể chuyển về trạng thái cũ hoặc trạng thái hiện tại"
             });
         }
 
-        // Trừ tồn kho khi chuyển sang "shipped" hoặc "delivered" mà trạng thái hiện tại chưa phải "shipped"
+        // Trừ kho nếu chuyển sang shipped hoặc delivered mà chưa shipped
         if ((status === 'shipped' || status === 'delivered') && order.status !== 'shipped') {
-            // Lấy danh sách các sản phẩm trong đơn hàng
             const orderItems = await OrderItem_MD.find({ order_id: order._id });
 
-            // Trừ số lượng trong kho cho từng sản phẩm
             for (const item of orderItems) {
                 const stock = await Stock_MD.findOne({ product_variant_id: item.variant_id });
                 if (stock) {
-                    // Tạo lịch sử tồn kho
                     await StockHistory_MD.create({
                         stock_id: stock._id,
                         quantity_change: -item.quantity,
@@ -468,17 +482,34 @@ export const updateOrderStatus = async (req, res) => {
                         note: `Đơn hàng chuyển sang trạng thái đang giao hàng`
                     });
 
-                    // Cập nhật số lượng tồn kho
                     stock.quantity -= item.quantity;
                     await stock.save();
 
-                    // Nếu hết hàng, cập nhật trạng thái variant
                     if (stock.quantity === 0) {
-                        await Variant_MD.findByIdAndUpdate(
-                            item.variant_id,
-                            { status: 'outOfStock' }
-                        );
+                        await Variant_MD.findByIdAndUpdate(item.variant_id, { status: 'outOfStock' });
                     }
+                }
+            }
+        }
+
+        // Cộng lại kho nếu chuyển sang hoàn hàng
+        if (status === 'returned') {
+            const orderItems = await OrderItem_MD.find({ order_id: order._id });
+
+            for (const item of orderItems) {
+                const stock = await Stock_MD.findOne({ product_variant_id: item.variant_id });
+                if (stock) {
+                    await StockHistory_MD.create({
+                        stock_id: stock._id,
+                        quantity_change: item.quantity,
+                        reason: `Order #${order._id} returned`,
+                        note: `Đơn hàng hoàn trả`
+                    });
+
+                    stock.quantity += item.quantity;
+                    await stock.save();
+
+                    await Variant_MD.findByIdAndUpdate(item.variant_id, { status: 'inStock' });
                 }
             }
         }
@@ -487,45 +518,44 @@ export const updateOrderStatus = async (req, res) => {
         order.status = status;
         await order.save();
 
-        // Tạo thông báo cho khách hàng về trạng thái đơn hàng
-        await Notification.create({
-            user_id: order.user_id.toString(), // Đảm bảo convert sang string
-            title: 'Cập nhật trạng thái đơn hàng',
-            message: `Đơn hàng #${order._id} của bạn đã chuyển sang trạng thái: ${getStatusText(status)}`,
-            type: 'order_status',
-            data: {
-                order_id: order._id,
-                status: status,
-                updated_at: new Date()
-            },
-        });
-
-        // Hàm helper để chuyển đổi status thành text dễ đọc
+        // Map trạng thái ra text
         function getStatusText(status) {
             const statusMap = {
                 'pending': 'Chờ xử lý',
                 'processing': 'Đang xử lý',
                 'shipped': 'Đang giao hàng',
                 'delivered': 'Đã giao hàng',
+                'returned': 'Đã hoàn hàng',
                 'canceled': 'Đã hủy'
             };
             return statusMap[status] || status;
         }
 
-        // Tạo thông báo cho admin và nhân viên về việc cập nhật trạng thái
-        const adminAndStaffForUpdate = await User_MD.find({
-            role: { $in: ['admin', 'employee'] }
+        // Gửi thông báo cho khách hàng
+        await Notification.create({
+            user_id: order.user_id.toString(),
+            title: 'Cập nhật trạng thái đơn hàng',
+            message: `Đơn hàng #${order._id} của bạn đã chuyển sang trạng thái: ${getStatusText(status)}`,
+            type: 'order_status',
+            data: {
+                order_id: order._id,
+                status,
+                updated_at: new Date()
+            }
         });
 
-        for (const adminUser of adminAndStaffForUpdate) {
+        // Gửi thông báo cho admin/nhân viên
+        const adminUsers = await User_MD.find({ role: { $in: ['admin', 'employee'] } });
+
+        for (const admin of adminUsers) {
             await Notification.create({
-                user_id: adminUser._id,
+                user_id: admin._id,
                 title: 'Cập nhật trạng thái đơn hàng',
-                message: `Đơn hàng #${order._id} đã được cập nhật sang trạng thái: ${getStatusText(status)}`,
+                message: `Đơn hàng #${order._id} đã chuyển sang trạng thái: ${getStatusText(status)}`,
                 type: 'order_status',
                 data: {
                     order_id: order._id,
-                    status: status,
+                    status,
                     updated_by: req.user._id,
                     customer_id: order.user_id
                 }
@@ -539,7 +569,8 @@ export const updateOrderStatus = async (req, res) => {
             error: error.message
         });
     }
-}
+};
+
 
 // hủy đơn hàng
 export const cancelOrder = async (req, res) => {
@@ -826,5 +857,272 @@ export const zaloPayCallback = async (req, res) => {
     } catch (error) {
         console.error("Lỗi callback ZaloPay:", error);
         return res.status(500).json({ return_code: -1, return_message: "Lỗi server" });
+    }
+};
+export const buyNowOrder = async (req, res) => {
+    try {
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({ message: "Vui lòng đăng nhập để tiếp tục" });
+        }
+
+        const user_id = req.user._id;
+        const {
+            variant_id,
+            quantity,
+            voucher_code,
+            shipping_address_id,
+            shipping_address,
+            full_name,
+            phone,
+            payment_method
+        } = req.body;
+
+        if (!variant_id || !quantity) {
+            return res.status(400).json({ message: "Thiếu thông tin sản phẩm" });
+        }
+
+        // Lấy variant và kiểm tra tồn kho
+        const variant = await Variant_MD.findById(variant_id).populate('product_id');
+        if (!variant || variant.status === 'outOfStock') {
+            return res.status(404).json({ message: "Sản phẩm không tồn tại hoặc đã hết hàng" });
+        }
+
+        const stock = await Stock_MD.findOne({ product_variant_id: variant_id });
+        if (!stock || stock.quantity < quantity) {
+            return res.status(400).json({ message: "Không đủ hàng trong kho" });
+        }
+
+        // Xử lý địa chỉ giao hàng như ở `createOrder`
+        const user = await User_MD.findById(user_id);
+        if (!user) return res.status(404).json({ message: "Không tìm thấy người dùng" });
+
+        let fullShippingAddress = "";
+        if (shipping_address_id) {
+            const existingAddress = user.shipping_addresses.id(shipping_address_id);
+            if (!existingAddress) return res.status(404).json({ message: "Địa chỉ giao hàng không hợp lệ" });
+            fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}`;
+        } else {
+            if (!shipping_address || !full_name || !phone)
+                return res.status(400).json({ message: "Thiếu thông tin địa chỉ giao hàng" });
+            fullShippingAddress = `${full_name} - ${phone} - ${shipping_address}`;
+        }
+
+        // Tính giá
+        const price = variant.price;
+        const sub_total = price * quantity;
+        let total_price = sub_total;
+        let voucher_discount = 0;
+        let voucher = null;
+
+        if (voucher_code) {
+            voucher = await Voucher_MD.findOne({
+                code: voucher_code.toUpperCase(),
+                isActive: true,
+                startDate: { $lte: new Date() },
+                endDate: { $gte: new Date() },
+                $expr: { $lt: ["$usedCount", "$quantity"] }
+            });
+
+            if (!voucher) return res.status(400).json({ message: "Voucher không hợp lệ" });
+            if (sub_total < voucher.minOrderValue) return res.status(400).json({
+                message: `Đơn hàng tối thiểu để dùng voucher là ${voucher.minOrderValue.toLocaleString('vi-VN')}đ`
+            });
+
+            if (voucher.type === 'percentage') {
+                voucher_discount = (sub_total * voucher.value) / 100;
+                if (voucher.maxDiscount) {
+                    voucher_discount = Math.min(voucher_discount, voucher.maxDiscount);
+                }
+            } else {
+                voucher_discount = voucher.value;
+            }
+            total_price = sub_total - voucher_discount;
+            voucher.usedCount += 1;
+            await voucher.save();
+        }
+
+        // Tạo order
+        const order = await Order_MD.create({
+            user_id,
+            voucher_id: voucher?._id || null,
+            voucher_discount,
+            sub_total,
+            total_price,
+            shipping_address: fullShippingAddress,
+            payment_method
+        });
+
+        const app_trans_id = `${moment().format('YYMMDD')}_${Math.floor(Math.random() * 1000000)}`;
+        order.payment_ref_id = app_trans_id;
+        await order.save();
+
+        // Tạo OrderItem
+        const orderItem = await OrderItem_MD.create({
+            order_id: order._id,
+            product_id: variant.product_id._id,
+            variant_id,
+            quantity,
+            price
+        });
+
+        // Nếu là thanh toán online
+        if (payment_method === "VNPAY") {
+            const response = await axios.get(`http://localhost:3000/api/orders/create-payment?amount=${total_price}&orderId=${order._id}`, {
+                headers: {
+                    Authorization: req.headers.authorization
+                }
+            });
+            if (response.data?.paymentUrl) {
+                return res.status(201).json({
+                    redirectUrl: response.data.paymentUrl,
+                    message: "Đang chuyển hướng đến VNPAY",
+                    donHang: {
+                        ...order.toObject(),
+                        chiTietDonHang: [orderItem],
+                        tongGoc: sub_total,
+                        giamGia: voucher_discount,
+                        tongThanhToan: total_price
+                    }
+                });
+            }
+        }
+
+        if (payment_method === "ZALOPAY") {
+            const zpResult = await createZaloPayPayment(total_price, order._id, app_trans_id);
+            if (zpResult.return_code === 1) {
+                return res.status(201).json({
+                    redirectUrl: zpResult.order_url,
+                    message: "Đang chuyển hướng đến ZaloPay",
+                    donHang: {
+                        ...order.toObject(),
+                        chiTietDonHang: [orderItem],
+                        tongGoc: sub_total,
+                        giamGia: voucher_discount,
+                        tongThanhToan: total_price
+                    }
+                });
+            }
+        }
+
+        const adminAndStaff = await User_MD.find({
+            role: { $in: ['admin', 'employee'] }
+        });
+
+        for (const adminUser of adminAndStaff) {
+            await Notification.create({
+                user_id: adminUser._id,
+                title: 'Đơn hàng mới',
+                message: `Có đơn hàng mới từ khách hàng ${user.username || user.email}`,
+                type: 'new_order',
+                data: {
+                    order_id: order._id,
+                    user_id: user_id
+                }
+            });
+        }
+        // Thanh toán COD
+        return res.status(201).json({
+            message: "Đơn hàng 'Mua ngay' đã được tạo thành công",
+            donHang: {
+                ...order.toObject(),
+                chiTietDonHang: [orderItem],
+                tongGoc: sub_total,
+                giamGia: voucher_discount,
+                tongThanhToan: total_price
+            }
+        });
+
+    } catch (error) {
+        console.error("Lỗi mua ngay:", error);
+        return res.status(500).json({
+            message: "Lỗi server khi xử lý mua ngay",
+            error: error.message
+        });
+    }
+};
+
+export const returnOrderByCustomer = async (req, res) => {
+    try {
+        const order = await Order_MD.findById(req.params.id);
+
+        if (!order) {
+            return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
+        }
+
+        // Kiểm tra đơn hàng có thuộc về người dùng không
+        if (order.user_id.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: "Bạn không có quyền hoàn đơn hàng này" });
+        }
+
+        // Chỉ cho hoàn nếu đã giao hàng
+        if (order.status !== 'delivered') {
+            return res.status(400).json({ message: "Chỉ được hoàn hàng khi đơn đã giao thành công" });
+        }
+
+        // Không hoàn lại đơn đã bị hoàn hoặc huỷ trước đó
+        if (order.status === 'returned' || order.status === 'canceled') {
+            return res.status(400).json({ message: "Đơn hàng đã ở trạng thái không thể hoàn" });
+        }
+
+        // Lấy các sản phẩm của đơn
+        const orderItems = await OrderItem_MD.find({ order_id: order._id });
+
+        for (const item of orderItems) {
+            const stock = await Stock_MD.findOne({ product_variant_id: item.variant_id });
+            if (stock) {
+                // Ghi log lịch sử hoàn
+                await StockHistory_MD.create({
+                    stock_id: stock._id,
+                    quantity_change: item.quantity,
+                    reason: `Order #${order._id} returned by customer`,
+                    note: `Khách hàng hoàn đơn`
+                });
+
+                // Cộng lại kho
+                stock.quantity += item.quantity;
+                await stock.save();
+
+                // Nếu đang out of stock thì chuyển về inStock
+                await Variant_MD.findByIdAndUpdate(item.variant_id, { status: 'inStock' });
+            }
+        }
+
+        // Cập nhật trạng thái đơn hàng
+        order.status = 'returned';
+        await order.save();
+
+        // Gửi thông báo cho admin
+        const adminUsers = await User_MD.find({ role: { $in: ['admin', 'employee'] } });
+
+        for (const admin of adminUsers) {
+            await Notification.create({
+                user_id: admin._id,
+                title: 'Khách hàng hoàn hàng',
+                message: `Khách hàng đã hoàn đơn hàng #${order._id}`,
+                type: 'order_returned',
+                data: {
+                    order_id: order._id,
+                    returned_by: req.user._id,
+                    returned_at: new Date()
+                }
+            });
+        }
+
+        // Thông báo xác nhận cho khách
+        await Notification.create({
+            user_id: req.user._id,
+            title: 'Xác nhận hoàn hàng',
+            message: `Chúng tôi đã tiếp nhận yêu cầu hoàn hàng cho đơn #${order._id}`,
+            type: 'order_returned',
+            data: {
+                order_id: order._id,
+                status: 'returned'
+            }
+        });
+
+        return res.status(200).json({ message: "Hoàn hàng thành công", order });
+
+    } catch (error) {
+        return res.status(500).json({ message: "Lỗi hoàn hàng", error: error.message });
     }
 };

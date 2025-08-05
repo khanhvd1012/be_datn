@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createOrder, getOrderById, updateOrderStatus, cancelOrder, getAllOrderUser, getAllOrderAdmin, createVNPAYPayment, zaloPayCallback } from "../controllers/order_CTL";
+import { createOrder, getOrderById, updateOrderStatus, cancelOrder, getAllOrderUser, getAllOrderAdmin, createVNPAYPayment, zaloPayCallback, buyNowOrder, quickPreview, returnOrderByCustomer } from "../controllers/order_CTL";
 import authMiddleware from "../middleware/auth_MID";
 import checkRole from "../middleware/checkRole_MID";
 import { ROLES } from "../config/roles";
@@ -15,5 +15,7 @@ orderRouter.post("/payment/zalopay/callback", zaloPayCallback);
 orderRouter.get("/:id", authMiddleware, getOrderById);
 orderRouter.put("/:id", authMiddleware, updateOrderStatus);
 orderRouter.put("/:id/cancel", authMiddleware, cancelOrder);
+orderRouter.post("/buy-now",authMiddleware,buyNowOrder)
+orderRouter.put(":id/return",authMiddleware,returnOrderByCustomer)
 
 export default orderRouter;

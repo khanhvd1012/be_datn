@@ -5,5 +5,11 @@ const stockHistorySchema = new mongoose.Schema({
     quantity_change: { type: Number, required: true },
     reason: { type: String, required: true },
     note: { type: String, required: false },
+    updated_by: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    }
+    
 }, { timestamps: true });
 export default mongoose.model("StockHistory", stockHistorySchema);
