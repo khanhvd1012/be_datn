@@ -30,10 +30,6 @@ export const getAllOrderAdmin = async (req, res) => {
                                 select: 'name',
                             }
                         ]
-                    },
-                    {
-                        path: 'size_id',
-                        select: 'size'
                     }
                 ]
             });
@@ -245,7 +241,6 @@ export const createOrder = async (req, res) => {
                 variant_id: item.variant_id._id,
                 quantity: item.quantity,
                 price: item.variant_id.price,
-                size_id: item.size_id
             }
 
             orderItemData.push(orderItem);
@@ -323,10 +318,6 @@ export const getAllOrderUser = async (req, res) => {
                                 select: 'name',
                             }
                         ]
-                    },
-                    {
-                        path: 'size_id',
-                        select: 'size'
                     }
                 ]
             })
@@ -361,10 +352,6 @@ export const getOrderById = async (req, res) => {
                             path: "color",
                             select: "name"
                         }
-                    },
-                    {
-                        path: "size_id",
-                        select: "size"
                     }
                 ]
             });
