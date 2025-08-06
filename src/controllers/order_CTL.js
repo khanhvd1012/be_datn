@@ -671,7 +671,7 @@ export const cancelOrder = async (req, res) => {
                     user_id: adminUser._id,
                     title: 'Đơn hàng bị hủy',
                     message: `Khách hàng đã hủy đơn hàng #${orderId}. Lý do: ${req.body.cancel_reason || 'Không có lý do'}`,
-                    type: 'order_cancelled',
+                    type: 'order_status',
                     data: {
                         order_id: orderId,
                         cancelled_by: 'user',
