@@ -21,7 +21,7 @@ export const getAllStock = async (req, res) => {
                         select: 'name'
                     },
                     {
-                        path: 'size', 
+                        path: 'size',
                         select: 'size'
                     }
                 ],
@@ -71,7 +71,7 @@ export const getAllStock = async (req, res) => {
                 _id: item._id,
                 sku: variant?.sku || 'N/A',
                 quantity: item.quantity,
-                color: variant?.color?.name || 'N/A', 
+                color: variant?.color?.name || 'N/A',
                 size: variant?.size?.size || 'N/A',
                 product_name: variant?.product_id?.name || 'N/A',
                 product_variant_id: item.product_variant_id,
@@ -123,10 +123,11 @@ export const updateStock = async (req, res) => {
         await stockHistory_MD.create({
             stock_id: stock._id,
             quantity_change: quantity_change,
-            reason: reason || 'Cập nhật số lượng'
+            reason: reason || 'Cập nhật số lượng',
+            updated_by: req.user._id
         });
 
-        // ✅ CHỈ tạo thông báo low stock khi:
+        // CHỈ tạo thông báo low stock khi:
         // 1. Số lượng mới <= ngưỡng cảnh báo
         // 2. Số lượng cũ > ngưỡng cảnh báo (tránh spam khi đã low stock)
         // 3. Số lượng mới > 0 (không cảnh báo khi hết hàng hoàn toàn)
@@ -195,6 +196,7 @@ export const getOneStockHistory = async (req, res) => {
         }
 
         const history = await stockHistory_MD.find({ stock_id: stock._id })
+            .populate('updated_by', 'name role')
             .sort({ createdAt: -1 });
 
         return res.status(200).json({
@@ -216,8 +218,9 @@ export const getAllStockHistory = async (req, res) => {
     try {
         // Lấy tất cả lịch sử kho và sắp xếp theo ngày tạo mới nhất
         const stockHistory = await stockHistory_MD.find()
-        // .populate('stock_id', 'product_variant_id')
-        // .sort({ createdAt: -1 });
+            .populate('updated_by', 'username role')
+            // .populate('stock_id', 'product_variant_id')
+            .sort({ createdAt: -1 });
 
         return res.status(200).json({
             message: 'Lấy lịch sử kho thành công',
