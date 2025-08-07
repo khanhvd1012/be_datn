@@ -4,6 +4,7 @@ import variant_MD from "../models/variant_MD";
 import cart_MD from "../models/cart_MD";
 import stock_MD from "../models/stock_MD";
 import Notification from "../models/notification_MD";
+import cartItem_MD from "../models/cartItem_MD";
 import User from "../models/auth_MD";
 
 export const getOneCart = async (req, res) => {

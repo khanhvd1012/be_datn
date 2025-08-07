@@ -20,11 +20,6 @@ const orderItemSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
-    size_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Sizes",
-        required: true
-    },
     price: {
         type: Number,
         required: true,

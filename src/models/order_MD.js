@@ -30,7 +30,6 @@ const orderSchema = new mongoose.Schema({
     cart_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Cart',
-        required: true
     },
     voucher_id: {
         type: mongoose.Schema.Types.ObjectId,
@@ -52,7 +51,7 @@ const orderSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: {
-            values: ['pending', 'processing', 'shipped', 'delivered', 'canceled'],
+            values: ['pending', 'processing', 'shipped', 'delivered', 'canceled', 'returned'],
             message: 'Trạng thái {VALUE} không hợp lệ'
         },
         default: 'pending'
@@ -108,9 +107,11 @@ orderSchema.virtual('trangThai').get(function () {
         'processing': 'Đang xử lý',
         'shipped': 'Đang giao hàng',
         'delivered': 'Đã giao hàng',
-        'canceled': 'Đã hủy'
+        'canceled': 'Đã hủy',
+        'returned': 'Đã hoàn hàng'
     };
     return statusMap[this.status] || this.status;
 });
+
 
 export default mongoose.model("Order", orderSchema);
