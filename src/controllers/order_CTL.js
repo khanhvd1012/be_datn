@@ -29,18 +29,20 @@ export const getAllOrderAdmin = async (req, res) => {
                         select: 'name'
                     }
                 }
-            });
-        return res.status(200).json({
-            message: 'Lấy danh sách đơn hàng thành công',
-            data: orders
-        });
+            })
+            .sort({ createdAt: -1 });
+
+return res.status(200).json({
+    message: 'Lấy danh sách đơn hàng thành công',
+    data: orders
+});
     } catch (error) {
-        console.error('Lỗi khi lấy danh sách đơn hàng:', error);
-        return res.status(500).json({
-            message: 'Đã xảy ra lỗi khi lấy danh sách đơn hàng',
-            error: error.message
-        });
-    }
+    console.error('Lỗi khi lấy danh sách đơn hàng:', error);
+    return res.status(500).json({
+        message: 'Đã xảy ra lỗi khi lấy danh sách đơn hàng',
+        error: error.message
+    });
+}
 };
 
 export const createOrder = async (req, res) => {
@@ -478,6 +480,7 @@ export const updateOrderStatus = async (req, res) => {
                     await StockHistory_MD.create({
                         stock_id: stock._id,
                         quantity_change: -item.quantity,
+                        updated_by: req.user._id,
                         reason: `Order #${order._id} shipped`,
                         note: `Đơn hàng chuyển sang trạng thái đang giao hàng`
                     });
@@ -502,6 +505,7 @@ export const updateOrderStatus = async (req, res) => {
                     await StockHistory_MD.create({
                         stock_id: stock._id,
                         quantity_change: item.quantity,
+                        updated_by: req.user._id,
                         reason: `Order #${order._id} returned`,
                         note: `Đơn hàng hoàn trả`
                     });
@@ -621,6 +625,7 @@ export const cancelOrder = async (req, res) => {
                     await StockHistory_MD.create({
                         stock_id: stock._id,
                         quantity_change: item.quantity,
+                        updated_by: req.user._id,
                         reason: `Admin Cancel Order #${orderId}`,
                         note: `Admin ${req.user.username} đã hủy đơn hàng đang giao`
                     });
@@ -1074,6 +1079,7 @@ export const returnOrderByCustomer = async (req, res) => {
                 await StockHistory_MD.create({
                     stock_id: stock._id,
                     quantity_change: item.quantity,
+                    updated_by: req.user._id,
                     reason: `Order #${order._id} returned by customer`,
                     note: `Khách hàng hoàn đơn`
                 });
