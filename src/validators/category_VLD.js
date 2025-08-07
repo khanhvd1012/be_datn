@@ -30,16 +30,6 @@ const categorySchema = Joi.object({
         }),
 
     logo_image: Joi.string().optional(),
-
-    brand: Joi.alternatives().try(
-        Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)),
-        Joi.string().pattern(/^[0-9a-fA-F]{24}$/)
-    ).required()
-    .messages({
-        'any.required': 'Trường thương hiệu là bắt buộc',
-        'string.pattern.base': 'ID thương hiệu không hợp lệ',
-        'array.includes': 'Danh sách thương hiệu chứa ID không hợp lệ',
-    }),
 });
 
 export const validateCategory = async (req, res, next) => {

@@ -1,24 +1,143 @@
 import Voucher_MD from "../models/voucher_MD";
-import mongoose from "mongoose";
+import Notification from "../models/notification_MD";
+import User from "../models/auth_MD";
+import { setVoucherTimeout, clearVoucherTimeout } from "../middleware/timeoutRegistry_MID";
 
 /**
- * Tạo voucher mới
+ * Gửi thông báo voucher mới cho tất cả admin
+ * @param {Object} voucher - Thông tin voucher
+ */
+const sendVoucherNotificationToAdmins = async (voucher) => {
+    try {
+        // Lấy danh sách tất cả admin
+        const admins = await User.find({ 
+            $or: [
+                { role: 'admin' },
+                { is_admin: true }
+            ]
+        });
+        
+        if (admins.length === 0) {
+            console.log('Không tìm thấy admin nào để gửi thông báo voucher');
+            return;
+        }
+
+        // Tạo thông báo cho từng admin
+        const notifications = admins.map(admin => ({
+            user_id: admin._id.toString(),
+            title: 'Voucher mới đã được tạo! 🎟️',
+            message: `Voucher "${voucher.code}" với giá trị ${voucher.type === 'percentage' ? voucher.value + '%' : voucher.value + 'đ'} đã được tạo thành công. Thông báo sẽ được gửi cho khách hàng sau 1 giờ.`,
+            type: 'voucher_new_admin',
+            data: {
+                voucher_id: voucher._id,
+                voucher_code: voucher.code,
+                discount_value: voucher.value,
+                discount_type: voucher.type,
+                expires_at: voucher.expires_at,
+                created_at: new Date(),
+                action: 'created'
+            },
+            is_read: false,
+            created_at: new Date()
+        }));
+
+        // Bulk insert để tối ưu performance
+        await Notification.insertMany(notifications);
+        console.log(`Đã gửi thông báo voucher mới "${voucher.code}" cho ${admins.length} admin(s)`);
+        
+    } catch (error) {
+        console.error('Lỗi khi gửi thông báo voucher cho admin:', error);
+        // Không throw error để không ảnh hưởng đến việc tạo voucher
+    }
+};
+
+/**
+ * Gửi thông báo voucher mới cho tất cả khách hàng (user)
+ * @param {Object} voucher - Thông tin voucher
+ */
+const sendVoucherNotificationToAllUsers = async (voucher) => {
+    try {
+        const users = await User.find({ 
+            $or: [
+                { role: 'user' },
+                { role: { $exists: false } }
+            ]
+        });
+
+        if (users.length === 0) {
+            console.log('Không tìm thấy user nào để gửi thông báo voucher');
+            return;
+        }
+
+        const notifications = users.map(user => ({
+            user_id: user._id.toString(),
+            title: 'Voucher mới đã có sẵn! 🎉',
+            message: `Sử dụng mã ${voucher.code} để nhận ưu đãi ${
+                voucher.type === 'percentage' ? voucher.value + '%' : voucher.value + 'đ'
+            } cho đơn hàng của bạn! Có hiệu lực từ ${new Date(voucher.startDate).toLocaleDateString('vi-VN')} đến ${new Date(voucher.endDate).toLocaleDateString('vi-VN')}.`,
+            type: 'voucher_new_user',
+            data: {
+                voucher_id: voucher._id,
+                voucher_code: voucher.code,
+                discount_value: voucher.value,
+                discount_type: voucher.type,
+                start_date: voucher.startDate,
+                end_date: voucher.endDate,
+                min_order_value: voucher.minOrderValue,
+                created_at: new Date()
+            },
+            is_read: false,
+            created_at: new Date()
+        }));
+
+        await Notification.insertMany(notifications);
+        console.log(`Đã gửi thông báo voucher "${voucher.code}" cho ${users.length} khách hàng`);
+        
+    } catch (error) {
+        console.error('Lỗi khi gửi thông báo voucher cho user:', error);
+        throw error;
+    }
+};
+
+
+/**
+ * Tạo voucher mới, gửi thông báo ngay cho admin và lên lịch gửi thông báo cho user sau 1 giờ
  * @param {Object} req - Request object chứa thông tin voucher cần tạo
  * @param {Object} res - Response object
  * @returns {Object} Voucher đã tạo thành công hoặc thông báo lỗi
  */
 export const createVoucher = async (req, res) => {
     try {
-        // kiểm tra xem voucher đã tồn tại chưa
+        // Kiểm tra xem voucher đã tồn tại chưa
         const existingVoucher = await Voucher_MD.findOne({ code: req.body.code });
         if (existingVoucher) {
             return res.status(400).json({
                 message: "Voucher đã tồn tại",
             });
         }
+
+        // Tạo voucher mới
         const voucher = await Voucher_MD.create(req.body);
+
+        // Gửi thông báo ngay lập tức cho admin
+        setImmediate(async () => {
+            await sendVoucherNotificationToAdmins(voucher);
+        });
+
+        // Lên lịch gửi thông báo cho user sau 1 giờ (3600000 milliseconds)
+        const timeoutId = setTimeout(async () => {
+            try {
+                await sendVoucherNotificationToAllUsers(voucher);
+                console.log(`[SCHEDULED] Đã gửi thông báo voucher ${voucher.code} cho tất cả khách hàng sau 1 giờ`);
+            } catch (error) {
+                console.error('[SCHEDULED] Lỗi khi gửi thông báo voucher cho user:', error);
+            }
+        }, 36000); // ✅ đúng 1 giờ
+        
+        setVoucherTimeout(voucher._id, timeoutId);
+
         return res.status(201).json({
-            message: "Tạo voucher thành công",
+            message: "Tạo voucher thành công. Admin đã được thông báo ngay lập tức. Thông báo sẽ được gửi cho khách hàng sau 1 giờ.",
             data: voucher
         });
     } catch (error) {
@@ -48,8 +167,8 @@ export const getAllVouchers = async (req, res) => {
 };
 
 /**
- * Lấy thông tin voucher theo mã code
- * @param {Object} req - Request object chứa mã code trong params
+ * Lấy thông tin voucher theo ID
+ * @param {Object} req - Request object chứa ID trong params
  * @param {Object} res - Response object
  * @returns {Object} Thông tin voucher hoặc thông báo lỗi
  */
@@ -62,7 +181,10 @@ export const getOneVoucher = async (req, res) => {
         }
         return res.status(200).json(voucher);
     } catch (error) {
-        return res.status(500).json({ message: "Lỗi khi lấy voucher", error: error.message });
+        return res.status(500).json({ 
+            message: "Lỗi khi lấy voucher", 
+            error: error.message 
+        });
     }
 };
 
@@ -117,6 +239,9 @@ export const deleteVoucher = async (req, res) => {
             return res.status(404).json({ message: "Không tìm thấy voucher" });
         }
 
+        // Xóa timeout cho voucher
+        clearVoucherTimeout(voucher._id);
+
         return res.status(200).json({ message: "Xóa voucher thành công" });
     } catch (error) {
         return res.status(500).json({
@@ -125,3 +250,55 @@ export const deleteVoucher = async (req, res) => {
         });
     }
 };
+
+// /**
+//  * Gửi thông báo voucher ngay lập tức cho user (dành cho admin test)
+//  * @param {Object} req - Request object chứa voucher_id
+//  * @param {Object} res - Response object
+//  */
+// export const sendVoucherNotificationToUsersNow = async (req, res) => {
+//     try {
+//         const voucher = await Voucher_MD.findById(req.params.id);
+        
+//         if (!voucher) {
+//             return res.status(404).json({ message: "Voucher không tồn tại" });
+//         }
+
+//         await sendVoucherNotificationToAllUsers(voucher);
+
+//         return res.status(200).json({
+//             message: "Đã gửi thông báo voucher cho tất cả khách hàng"
+//         });
+//     } catch (error) {
+//         return res.status(500).json({
+//             message: "Lỗi khi gửi thông báo",
+//             error: error.message
+//         });
+//     }
+// };
+
+// /**
+//  * Gửi thông báo voucher ngay lập tức cho admin (dành cho test)
+//  * @param {Object} req - Request object chứa voucher_id
+//  * @param {Object} res - Response object
+//  */
+// export const sendVoucherNotificationToAdminsNow = async (req, res) => {
+//     try {
+//         const voucher = await Voucher_MD.findById(req.params.id);
+        
+//         if (!voucher) {
+//             return res.status(404).json({ message: "Voucher không tồn tại" });
+//         }
+
+//         await sendVoucherNotificationToAdmins(voucher);
+
+//         return res.status(200).json({
+//             message: "Đã gửi thông báo voucher cho tất cả admin"
+//         });
+//     } catch (error) {
+//         return res.status(500).json({
+//             message: "Lỗi khi gửi thông báo",
+//             error: error.message
+//         });
+//     }
+// };

@@ -15,10 +15,6 @@ const categorySchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Products'
     }],
-    brand: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Brands"
-    }],
 }, { timestamps: true });
 
 const Categories = mongoose.models.Categories || mongoose.model('Categories', categorySchema);

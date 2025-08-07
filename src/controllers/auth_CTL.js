@@ -299,3 +299,34 @@ export const deleteAddress = async (req, res) => {
         });
     }
 }
+
+
+export const toggleAutoRestore = async (req, res) => {
+    try {
+        const user = await user_MD.findById(req.user._id);
+        user.auto_restore_cart = !user.auto_restore_cart;
+        await user.save();
+
+        return res.status(200).json({
+            message: `Đã ${user.auto_restore_cart ? 'bật' : 'tắt'} chức năng khôi phục giỏ hàng tự động.`,
+            auto_restore_cart: user.auto_restore_cart
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Lỗi khi thay đổi chế độ khôi phục giỏ hàng",
+            error: error.message
+        });
+    }
+};
+
+export const getAutoRestoreSettings = async (req, res) => {
+    try {
+        const user = await user_MD.findById(req.user._id);
+        return res.status(200).json({ auto_restore_cart: user.auto_restore_cart });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Lỗi khi lấy trạng thái tự động khôi phục",
+            error: error.message
+        });
+    }
+};

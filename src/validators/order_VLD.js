@@ -17,6 +17,13 @@ const orderSchema = Joi.object({
             'any.only': 'Phương thức thanh toán không hợp lệ'
         }),
     voucher_code: Joi.string().allow('', null).optional().label('Mã giảm giá'),
+    size_id: Joi.string()
+    .pattern(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+        'string.pattern.base': 'Định dạng ID size không hợp lệ',
+        'string.empty': 'Vui lòng chọn size'
+    }),
 });
 
 export const validateOrder = async (req, res, next) => {
