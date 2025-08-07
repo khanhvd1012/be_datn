@@ -18,10 +18,10 @@ notificationRouter.use(authMiddleware);
 
 // Routes cho tất cả users
 notificationRouter.get('/', getAllNotifications);
+notificationRouter.put('/read-all', markAllAsRead);           
 notificationRouter.put('/:id/read', markAsRead);
-notificationRouter.put('/read-all', markAllAsRead);
+notificationRouter.delete('/read/all', deleteAllRead);        
 notificationRouter.delete('/:id', deleteNotification);
-notificationRouter.delete('/read/all', deleteAllRead);
 
 // Routes cho admin và employee
 notificationRouter.get('/low-stock', checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), getLowStockNotifications);

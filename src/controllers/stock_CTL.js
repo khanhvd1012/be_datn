@@ -127,7 +127,7 @@ export const updateStock = async (req, res) => {
             updated_by: req.user._id
         });
 
-        // ✅ CHỈ tạo thông báo low stock khi:
+        // CHỈ tạo thông báo low stock khi:
         // 1. Số lượng mới <= ngưỡng cảnh báo
         // 2. Số lượng cũ > ngưỡng cảnh báo (tránh spam khi đã low stock)
         // 3. Số lượng mới > 0 (không cảnh báo khi hết hàng hoàn toàn)

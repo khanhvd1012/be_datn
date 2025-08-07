@@ -8,6 +8,7 @@ import Color from "../models/color_MD";
 import StockHistory from "../models/stockHistory_MD";
 import Size from "../models/size_MD";
 import review_MD from "../models/review_MD";
+import OrderItem from "../models/orderItem_MD"
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -395,4 +396,102 @@ export const deleteVariant = async (req, res) => {
             error: error.message
         });
     }
+};
+
+export const getTopSellingVariants = async (req, res, next) => {
+  try {
+    const topSellingVariants = await OrderItem.aggregate([
+      {
+        $lookup: {
+          from: "orders",
+          localField: "order_id",
+          foreignField: "_id",
+          as: "order",
+        },
+      },
+      { $unwind: "$order" },
+      {
+        $match: {
+          "order.status": "delivered",
+        },
+      },
+      {
+        $group: {
+          _id: "$variant_id",
+          totalSold: { $sum: "$quantity" },
+        },
+      },
+      { $sort: { totalSold: -1 } },
+      {
+        $lookup: {
+          from: "variants",
+          localField: "_id",
+          foreignField: "_id",
+          as: "variant",
+        },
+      },
+      { $unwind: "$variant" },
+      {
+        $project: {
+          _id: 0,
+          variant_id: "$variant._id",
+          sku: "$variant.sku",
+          price: "$variant.price",
+          image_url: "$variant.image_url",
+          totalSold: 1,
+        },
+      },
+    ]);
+
+    res.status(200).json({ success: true, data: topSellingVariants });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getTopRatedVariants = async (req, res, next) => {
+  try {
+    const topRatedVariants = await review_MD.aggregate([
+      {
+        $match: {
+          rating: { $gte: 4 },
+          product_variant_id: { $ne: null },
+        },
+      },
+      {
+        $group: {
+          _id: "$product_variant_id",
+          averageRating: { $avg: "$rating" },
+          reviewCount: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { averageRating: -1 },
+      },
+      {
+        $lookup: {
+          from: "variants",
+          localField: "_id",
+          foreignField: "_id",
+          as: "variant",
+        },
+      },
+      { $unwind: "$variant" },
+      {
+        $project: {
+          _id: 0,
+          variant_id: "$variant._id",
+          sku: "$variant.sku",
+          price: "$variant.price",
+          image_url: "$variant.image_url",
+          averageRating: 1,
+          reviewCount: 1,
+        },
+      },
+    ]);
+
+    res.status(200).json({ success: true, data: topRatedVariants });
+  } catch (error) {
+    next(error);
+  }
 };

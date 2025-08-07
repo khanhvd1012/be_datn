@@ -281,8 +281,10 @@ export const createOrder = async (req, res) => {
 
         if (payment_method === "ZALOPAY") {
             const zpResult = await createZaloPayPayment(total_price, order._id, app_trans_id);
-
             if (zpResult.return_code === 1) {
+                await CartItem_MD.deleteMany({ cart_id });
+                await Cart_MD.findByIdAndUpdate(cart_id, { cart_items: [] });
+
                 return res.status(201).json({
                     redirectUrl: zpResult.order_url,
                     message: "Đơn hàng đã được tạo. Đang chuyển hướng đến ZaloPay.",
@@ -298,6 +300,7 @@ export const createOrder = async (req, res) => {
                 return res.status(500).json({ message: "Không thể tạo thanh toán ZaloPay", zpResult });
             }
         }
+
         const adminAndStaff = await User_MD.find({
             role: { $in: ['admin', 'employee'] }
         });
@@ -700,20 +703,19 @@ export const cancelOrder = async (req, res) => {
         });
     }
 }
-
 export const createVNPAYPayment = async (req, res) => {
     const { amount, orderId } = req.query;
 
-    if (!amount || !orderId || isNaN(amount)) {
-        return res.status(400).json({ message: "Thiếu hoặc sai thông tin thanh toán" });
+    if (!amount || !orderId) {
+        return res.status(400).json({ message: "Thiếu thông tin thanh toán" });
     }
 
-    const vnp_TmnCode = "MTV05YVA"; // mã TMN VNPAY
-    const vnp_HashSecret = "PBNLKF8YGRNCPXLDJLY9V1023CW8206U";
+    const vnp_TmnCode = "I560CTDN"; // mã TMN VNPAY
+    const vnp_HashSecret = "3IY904FKDJRQDO8GU1204ZVXI3KB8352";
     const vnp_Url = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
     const vnp_ReturnUrl = `http://localhost:5173/payment-result?orderId=${orderId}`;
 
-    const ipAddr = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    const ipAddr = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').toString();
 
     const tmnCode = vnp_TmnCode;
     const secretKey = vnp_HashSecret;
@@ -772,7 +774,9 @@ const config = {
 };
 
 export const createZaloPayPayment = async (amount, orderId, userId) => {
-    const embed_data = {};
+    const embed_data = {
+        redirecturl: "http://localhost:5173/checkout/success"
+    };
     const items = [];
 
     const transID = Math.floor(Math.random() * 1000000);
@@ -864,6 +868,7 @@ export const zaloPayCallback = async (req, res) => {
         return res.status(500).json({ return_code: -1, return_message: "Lỗi server" });
     }
 };
+
 export const buyNowOrder = async (req, res) => {
     try {
         if (!req.user || !req.user._id) {
@@ -1132,3 +1137,4 @@ export const returnOrderByCustomer = async (req, res) => {
         return res.status(500).json({ message: "Lỗi hoàn hàng", error: error.message });
     }
 };
+
