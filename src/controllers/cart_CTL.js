@@ -289,6 +289,7 @@ export const updateCartItem = async (req, res) => {
         });
     }
 };
+
 // Xóa sản phẩm khỏi giỏ hàng
 export const removeFromCart = async (req, res) => {
     try {
@@ -304,13 +305,6 @@ export const removeFromCart = async (req, res) => {
 
         // lưu cart_id trước khi xóa
         const cartId = cartItem.cart_id;
-
-        // cập nhật lại số lượng trong kho trước khi xoá cartItem
-        const stock = await stock_MD.findOne({ product_variant_id: cartItem.variant_id });
-        if (stock) {
-            stock.quantity += cartItem.quantity;
-            await stock.save();
-        }
 
         // xóa sản phẩm trong giỏ hàng
         await cartItem_MD.findByIdAndDelete(req.params.id);

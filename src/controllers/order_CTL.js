@@ -250,10 +250,39 @@ export const createOrder = async (req, res) => {
         // tạo đơn hàng item
         const orderItems = await OrderItem_MD.insertMany(orderItemData);
 
+        if (payment_method === "VNPAY") {
+            // Gọi API tạo payment URL
+            const response = await axios.get(`http://localhost:3000/api/orders/create-payment?amount=${total_price}&orderId=${order._id}`, {
+                headers: {
+                    Authorization: req.headers.authorization // giữ token để qua authMiddleware
+                }
+            });
+
+            if (response.data?.paymentUrl) {
+                return res.status(201).json({
+                    redirectUrl: response.data.paymentUrl, // để client redirect tới đây
+                    message: "Đơn hàng đã được tạo. Đang chuyển hướng đến VNPAY.",
+                    donHang: {
+                        ...order.toObject(),
+                        chiTietDonHang: orderItems,
+                        tongGoc: sub_total,
+                        giamGia: voucher_discount,
+                        tongThanhToan: total_price
+                    }
+                });
+            } else {
+                return res.status(500).json({
+                    message: "Không thể tạo liên kết thanh toán VNPAY"
+                });
+            }
+        }
+
         if (payment_method === "ZALOPAY") {
             const zpResult = await createZaloPayPayment(total_price, order._id, app_trans_id);
-
             if (zpResult.return_code === 1) {
+                await CartItem_MD.deleteMany({ cart_id });
+                await Cart_MD.findByIdAndUpdate(cart_id, { cart_items: [] });
+
                 return res.status(201).json({
                     redirectUrl: zpResult.order_url,
                     message: "Đơn hàng đã được tạo. Đang chuyển hướng đến ZaloPay.",
@@ -269,6 +298,7 @@ export const createOrder = async (req, res) => {
                 return res.status(500).json({ message: "Không thể tạo thanh toán ZaloPay", zpResult });
             }
         }
+
         const adminAndStaff = await User_MD.find({
             role: { $in: ['admin', 'employee'] }
         });
@@ -668,6 +698,68 @@ export const cancelOrder = async (req, res) => {
         });
     }
 }
+export const createVNPAYPayment = async (req, res) => {
+    const { amount, orderId } = req.query;
+
+    if (!amount || !orderId) {
+        return res.status(400).json({ message: "Thiếu thông tin thanh toán" });
+    }
+
+    const vnp_TmnCode = "I560CTDN"; // mã TMN VNPAY
+    const vnp_HashSecret = "3IY904FKDJRQDO8GU1204ZVXI3KB8352";
+    const vnp_Url = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
+    const vnp_ReturnUrl = `http://localhost:5173/payment-result?orderId=${orderId}`;
+
+    const ipAddr = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').toString();
+
+    const tmnCode = vnp_TmnCode;
+    const secretKey = vnp_HashSecret;
+    const vnpUrl = vnp_Url;
+    const returnUrl = vnp_ReturnUrl;
+
+    const vnp_TxnRef = dateFormat(new Date(), "yyyymmddHHMMss");
+    const vnp_OrderInfo = `Thanh toán đơn hàng ${orderId}`;
+    const vnp_OrderType = "other";
+    const vnp_Amount = amount * 100;
+    const vnp_Locale = "vn";
+    const vnp_BankCode = "";
+    const vnp_CreateDate = moment().format('YYYYMMDDHHmmss');
+
+    let vnp_Params = {
+        vnp_Version: "2.1.0",
+        vnp_Command: "pay",
+        vnp_TmnCode: tmnCode,
+        vnp_Locale,
+        vnp_CurrCode: "VND",
+        vnp_TxnRef,
+        vnp_OrderInfo,
+        vnp_OrderType,
+        vnp_Amount,
+        vnp_ReturnUrl: returnUrl,
+        vnp_IpAddr: ipAddr,
+        vnp_CreateDate
+    };
+
+    const sortObject = (obj) => {
+        const sorted = {};
+        const keys = Object.keys(obj).sort();
+        keys.forEach((key) => {
+            sorted[key] = obj[key];
+        });
+        return sorted;
+    };
+
+    vnp_Params = sortObject(vnp_Params);
+
+    const signData = querystring.stringify(vnp_Params, { encode: false });
+    const hmac = crypto.createHmac("sha512", secretKey);
+    const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest("hex");
+
+    vnp_Params.vnp_SecureHash = signed;
+    const paymentUrl = vnpUrl + '?' + querystring.stringify(vnp_Params, { encode: true });
+
+    return res.json({ paymentUrl });
+};
 
 const config = {
     app_id: '2554',
@@ -677,7 +769,9 @@ const config = {
 };
 
 export const createZaloPayPayment = async (amount, orderId, userId) => {
-    const embed_data = {};
+    const embed_data = {
+        redirecturl: "http://localhost:5173/checkout/success"
+    };
     const items = [];
 
     const transID = Math.floor(Math.random() * 1000000);
@@ -769,6 +863,7 @@ export const zaloPayCallback = async (req, res) => {
         return res.status(500).json({ return_code: -1, return_message: "Lỗi server" });
     }
 };
+
 export const buyNowOrder = async (req, res) => {
     try {
         if (!req.user || !req.user._id) {
