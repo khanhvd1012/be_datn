@@ -792,7 +792,7 @@ export const createZaloPayPayment = async (amount, orderId, userId) => {
         embed_data: JSON.stringify(embed_data),
         description: `Thanh toán đơn hàng #${orderId}`,
         bank_code: "",
-        callback_url: "http://localhost:3000/api/payment/zalopay/callback"
+        callback_url: "http://localhost:3000/api/orders/payment/zalopay/callback"
     };
 
     const data =

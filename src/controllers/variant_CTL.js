@@ -9,6 +9,7 @@ import StockHistory from "../models/stockHistory_MD";
 import Size from "../models/size_MD";
 import review_MD from "../models/review_MD";
 import OrderItem from "../models/orderItem_MD"
+import mongoose from "mongoose";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -106,7 +107,8 @@ export const createVariant = async (req, res) => {
             await StockHistory.create({
                 stock_id: stock._id,
                 quantity_change: req.body.initial_stock,
-                reason: 'Nhập kho ban đầu'
+                reason: 'Nhập kho ban đầu',
+                updated_by: req.user._id
             });
 
             return res.status(201).json({
@@ -422,6 +424,8 @@ export const getTopSellingVariants = async (req, res, next) => {
         },
       },
       { $sort: { totalSold: -1 } },
+
+      // Lấy dữ liệu variant
       {
         $lookup: {
           from: "variants",
@@ -431,13 +435,42 @@ export const getTopSellingVariants = async (req, res, next) => {
         },
       },
       { $unwind: "$variant" },
+
+      // Lấy thông tin product
+      {
+        $lookup: {
+          from: "products",
+          localField: "variant.product_id",
+          foreignField: "_id",
+          as: "product",
+        },
+      },
+      { $unwind: "$product" },
+
+      // Lấy thông tin color
+      {
+        $lookup: {
+          from: "colors",
+          localField: "variant.color",
+          foreignField: "_id",
+          as: "color",
+        },
+      },
+      { $unwind: { path: "$color", preserveNullAndEmptyArrays: true } },
+
+      // Chọn các trường cần thiết
       {
         $project: {
-          _id: 0,
-          variant_id: "$variant._id",
+          _id: "$variant._id",
           sku: "$variant.sku",
           price: "$variant.price",
           image_url: "$variant.image_url",
+          createdAt: "$variant.createdAt",
+          averageRating: "$variant.averageRating",
+          product_id: "$product._id",
+          product_name: "$product.name",
+          product_slug: "$product.slug",
+          color: "$color", // sẽ là object { _id, name, code }
           totalSold: 1,
         },
       },
@@ -449,34 +482,53 @@ export const getTopSellingVariants = async (req, res, next) => {
   }
 };
 
+
 export const getTopRatedVariants = async (req, res, next) => {
   try {
     const topRatedVariants = await review_MD.aggregate([
       {
-        $match: {
-          rating: { $gte: 4 },
-          product_variant_id: { $ne: null },
-        },
+        $lookup: {
+          from: "orderitems",
+          localField: "order_item",
+          foreignField: "_id",
+          as: "order_item"
+        }
       },
+      { $unwind: "$order_item" },
       {
         $group: {
-          _id: "$product_variant_id",
+          _id: "$order_item.variant_id",
           averageRating: { $avg: "$rating" },
-          reviewCount: { $sum: 1 },
-        },
-      },
-      {
-        $sort: { averageRating: -1 },
+          reviewCount: { $sum: 1 }
+        }
       },
       {
         $lookup: {
           from: "variants",
           localField: "_id",
           foreignField: "_id",
-          as: "variant",
-        },
+          as: "variant"
+        }
       },
       { $unwind: "$variant" },
+      {
+        $lookup: {
+          from: "colors",
+          localField: "variant.color",
+          foreignField: "_id",
+          as: "color"
+        }
+      },
+      { $unwind: "$color" },
+      {
+        $lookup: {
+          from: "sizes",
+          localField: "variant.size",
+          foreignField: "_id",
+          as: "size"
+        }
+      },
+      { $unwind: "$size" },
       {
         $project: {
           _id: 0,
@@ -484,10 +536,13 @@ export const getTopRatedVariants = async (req, res, next) => {
           sku: "$variant.sku",
           price: "$variant.price",
           image_url: "$variant.image_url",
+          color: "$color",
+          size: "$size",
           averageRating: 1,
-          reviewCount: 1,
-        },
+          reviewCount: 1
+        }
       },
+      { $sort: { averageRating: -1 } }
     ]);
 
     res.status(200).json({ success: true, data: topRatedVariants });
@@ -495,3 +550,5 @@ export const getTopRatedVariants = async (req, res, next) => {
     next(error);
   }
 };
+
+
