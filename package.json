@@ -19,6 +19,7 @@
     "mongoose-paginate-v2": "^1.9.0",
     "multer": "^2.0.0",
     "slugify": "^1.6.6",
+    "truncate-html": "^1.2.2",
     "vite-plugin-node": "^5.0.1"
   },
   "name": "back_end",

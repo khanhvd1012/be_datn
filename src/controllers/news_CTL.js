@@ -3,6 +3,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import mongoose from "mongoose";
+import truncate from "truncate-html";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,7 +26,12 @@ export const getAllNews = async (req, res) => {
       .populate({ path: "author", select: "username" })
       .sort({ createdAt: -1 });
 
-    res.status(200).json(newsList);
+    const formatted = newsList.map((news) => ({
+      ...news.toObject(),
+      excerpt: truncate(news.content, 150, { ellipsis: "..." })
+    }));
+
+    res.status(200).json(formatted);
   } catch (error) {
     console.error("Lỗi khi lấy danh sách tin tức:", error);
     res.status(500).json({ message: "Lỗi máy chủ nội bộ" });
