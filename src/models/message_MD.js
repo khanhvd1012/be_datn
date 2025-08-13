@@ -21,8 +21,8 @@ const messageSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['text', 'image'],
-        default: 'text'
+        enum: ['text', 'image', 'file','system' ],
+        default: 'text',
     },
     isRead: {
         type: Boolean,
