@@ -2,6 +2,7 @@ import Stock_MD from "../models/stock_MD";
 import variant_MD from "../models/variant_MD";
 import stockHistory_MD from "../models/stockHistory_MD";
 import Notification from "../models/notification_MD";
+import User_MD from "../models/auth_MD"; 
 
 // Hằng số cho ngưỡng cảnh báo tồn kho thấp
 const LOW_STOCK_THRESHOLD = 5;
@@ -133,8 +134,7 @@ export const updateStock = async (req, res) => {
         // 3. Số lượng mới > 0 (không cảnh báo khi hết hàng hoàn toàn)
         if (newQuantity <= LOW_STOCK_THRESHOLD && oldQuantity > LOW_STOCK_THRESHOLD && newQuantity > 0) {
             // Tạo thông báo cho tất cả admin và employee
-            const User = await import('../models/user_MD').then(m => m.default);
-            const adminsAndEmployees = await User.find({ role: { $in: ['admin', 'employee'] } });
+            const adminsAndEmployees = await User_MD.find({ role: { $in: ['admin', 'employee'] } });
 
             for (const user of adminsAndEmployees) {
                 // Kiểm tra xem đã có thông báo tương tự chưa trong 24h

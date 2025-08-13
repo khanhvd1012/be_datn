@@ -32,17 +32,17 @@ export const getAllOrderAdmin = async (req, res) => {
             })
             .sort({ createdAt: -1 });
 
-return res.status(200).json({
-    message: 'Lấy danh sách đơn hàng thành công',
-    data: orders
-});
+        return res.status(200).json({
+            message: 'Lấy danh sách đơn hàng thành công',
+            data: orders
+        });
     } catch (error) {
-    console.error('Lỗi khi lấy danh sách đơn hàng:', error);
-    return res.status(500).json({
-        message: 'Đã xảy ra lỗi khi lấy danh sách đơn hàng',
-        error: error.message
-    });
-}
+        console.error('Lỗi khi lấy danh sách đơn hàng:', error);
+        return res.status(500).json({
+            message: 'Đã xảy ra lỗi khi lấy danh sách đơn hàng',
+            error: error.message
+        });
+    }
 };
 
 export const createOrder = async (req, res) => {
@@ -463,6 +463,13 @@ export const updateOrderStatus = async (req, res) => {
         if (order.status === 'returned') {
             return res.status(400).json({
                 message: "Đơn hàng đã được hoàn trước đó"
+            });
+        }
+
+        // Chỉ cho hoàn hàng khi đã giao
+        if (status === 'returned' && order.status !== 'delivered') {
+            return res.status(400).json({
+                message: "Chỉ có thể hoàn hàng khi đơn hàng đã được giao"
             });
         }
 
