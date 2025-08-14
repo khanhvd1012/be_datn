@@ -401,154 +401,152 @@ export const deleteVariant = async (req, res) => {
 };
 
 export const getTopSellingVariants = async (req, res, next) => {
-  try {
-    const topSellingVariants = await OrderItem.aggregate([
-      {
-        $lookup: {
-          from: "orders",
-          localField: "order_id",
-          foreignField: "_id",
-          as: "order",
-        },
-      },
-      { $unwind: "$order" },
-      {
-        $match: {
-          "order.status": "delivered",
-        },
-      },
-      {
-        $group: {
-          _id: "$variant_id",
-          totalSold: { $sum: "$quantity" },
-        },
-      },
-      { $sort: { totalSold: -1 } },
+    try {
+        const topSellingVariants = await OrderItem.aggregate([
+            {
+                $lookup: {
+                    from: "orders",
+                    localField: "order_id",
+                    foreignField: "_id",
+                    as: "order",
+                },
+            },
+            { $unwind: "$order" },
+            {
+                $match: {
+                    "order.status": "delivered",
+                },
+            },
+            {
+                $group: {
+                    _id: "$variant_id",
+                    totalSold: { $sum: "$quantity" },
+                },
+            },
+            { $sort: { totalSold: -1 } },
 
-      // Lấy dữ liệu variant
-      {
-        $lookup: {
-          from: "variants",
-          localField: "_id",
-          foreignField: "_id",
-          as: "variant",
-        },
-      },
-      { $unwind: "$variant" },
+            // Lấy dữ liệu variant
+            {
+                $lookup: {
+                    from: "variants",
+                    localField: "_id",
+                    foreignField: "_id",
+                    as: "variant",
+                },
+            },
+            { $unwind: "$variant" },
 
-      // Lấy thông tin product
-      {
-        $lookup: {
-          from: "products",
-          localField: "variant.product_id",
-          foreignField: "_id",
-          as: "product",
-        },
-      },
-      { $unwind: "$product" },
+            // Lấy thông tin product
+            {
+                $lookup: {
+                    from: "products",
+                    localField: "variant.product_id",
+                    foreignField: "_id",
+                    as: "product",
+                },
+            },
+            { $unwind: "$product" },
 
-      // Lấy thông tin color
-      {
-        $lookup: {
-          from: "colors",
-          localField: "variant.color",
-          foreignField: "_id",
-          as: "color",
-        },
-      },
-      { $unwind: { path: "$color", preserveNullAndEmptyArrays: true } },
+            // Lấy thông tin color
+            {
+                $lookup: {
+                    from: "colors",
+                    localField: "variant.color",
+                    foreignField: "_id",
+                    as: "color",
+                },
+            },
+            { $unwind: { path: "$color", preserveNullAndEmptyArrays: true } },
 
-      // Chọn các trường cần thiết
-      {
-        $project: {
-          _id: "$variant._id",
-          sku: "$variant.sku",
-          price: "$variant.price",
-          image_url: "$variant.image_url",
-          createdAt: "$variant.createdAt",
-          averageRating: "$variant.averageRating",
-          product_id: "$product._id",
-          product_name: "$product.name",
-          product_slug: "$product.slug",
-          color: "$color", // sẽ là object { _id, name, code }
-          totalSold: 1,
-        },
-      },
-    ]);
+            // Chọn các trường cần thiết
+            {
+                $project: {
+                    _id: "$variant._id",
+                    sku: "$variant.sku",
+                    price: "$variant.price",
+                    image_url: "$variant.image_url",
+                    createdAt: "$variant.createdAt",
+                    averageRating: "$variant.averageRating",
+                    product_id: "$product._id",
+                    product_name: "$product.name",
+                    product_slug: "$product.slug",
+                    color: "$color", // sẽ là object { _id, name, code }
+                    totalSold: 1,
+                },
+            },
+        ]);
 
-    res.status(200).json({ success: true, data: topSellingVariants });
-  } catch (error) {
-    next(error);
-  }
+        res.status(200).json({ success: true, data: topSellingVariants });
+    } catch (error) {
+        next(error);
+    }
 };
 
-
 export const getTopRatedVariants = async (req, res, next) => {
-  try {
-    const topRatedVariants = await review_MD.aggregate([
-      {
-        $lookup: {
-          from: "orderitems",
-          localField: "order_item",
-          foreignField: "_id",
-          as: "order_item"
-        }
-      },
-      { $unwind: "$order_item" },
-      {
-        $group: {
-          _id: "$order_item.variant_id",
-          averageRating: { $avg: "$rating" },
-          reviewCount: { $sum: 1 }
-        }
-      },
-      {
-        $lookup: {
-          from: "variants",
-          localField: "_id",
-          foreignField: "_id",
-          as: "variant"
-        }
-      },
-      { $unwind: "$variant" },
-      {
-        $lookup: {
-          from: "colors",
-          localField: "variant.color",
-          foreignField: "_id",
-          as: "color"
-        }
-      },
-      { $unwind: "$color" },
-      {
-        $lookup: {
-          from: "sizes",
-          localField: "variant.size",
-          foreignField: "_id",
-          as: "size"
-        }
-      },
-      { $unwind: "$size" },
-      {
-        $project: {
-          _id: 0,
-          variant_id: "$variant._id",
-          sku: "$variant.sku",
-          price: "$variant.price",
-          image_url: "$variant.image_url",
-          color: "$color",
-          size: "$size",
-          averageRating: 1,
-          reviewCount: 1
-        }
-      },
-      { $sort: { averageRating: -1 } }
-    ]);
+    try {
+        const topRatedVariants = await review_MD.aggregate([
+            {
+                $lookup: {
+                    from: "orderitems",
+                    localField: "order_item",
+                    foreignField: "_id",
+                    as: "order_item"
+                }
+            },
+            { $unwind: "$order_item" },
+            {
+                $group: {
+                    _id: "$order_item.variant_id",
+                    averageRating: { $avg: "$rating" },
+                    reviewCount: { $sum: 1 }
+                }
+            },
+            {
+                $lookup: {
+                    from: "variants",
+                    localField: "_id",
+                    foreignField: "_id",
+                    as: "variant"
+                }
+            },
+            { $unwind: "$variant" },
+            {
+                $lookup: {
+                    from: "colors",
+                    localField: "variant.color",
+                    foreignField: "_id",
+                    as: "color"
+                }
+            },
+            { $unwind: "$color" },
+            {
+                $lookup: {
+                    from: "sizes",
+                    localField: "variant.size",
+                    foreignField: "_id",
+                    as: "size"
+                }
+            },
+            { $unwind: "$size" },
+            {
+                $project: {
+                    _id: "$variant._id", 
+                    sku: "$variant.sku",
+                    price: "$variant.price",
+                    image_url: "$variant.image_url",
+                    color: "$color",
+                    size: "$size",
+                    averageRating: 1,
+                    reviewCount: 1
+                }
+            },
+            { $sort: { averageRating: -1 } }
+        ]);
 
-    res.status(200).json({ success: true, data: topRatedVariants });
-  } catch (error) {
-    next(error);
-  }
+        res.status(200).json({ success: true, data: topRatedVariants });
+    } catch (error) {
+        next(error);
+    }
 };
 
 
