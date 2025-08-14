@@ -437,6 +437,13 @@ export const updateOrderStatus = async (req, res) => {
             });
         }
 
+        // Chỉ cho hoàn hàng khi đã giao
+        if (status === 'returned' && order.status !== 'delivered') {
+            return res.status(400).json({
+                message: "Chỉ có thể hoàn hàng khi đơn hàng đã được giao"
+            });
+        }
+
         // Kiểm tra thứ tự trạng thái (trừ khi hoàn hàng)
         if (status !== 'returned' && statusOrder[status] <= statusOrder[order.status]) {
             return res.status(400).json({
