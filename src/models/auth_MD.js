@@ -12,20 +12,22 @@ const userSchema = new mongoose.Schema(
         user_id: { type: String, required: true, unique: true },
         username: { type: String, required: true },
         email: { type: String, required: true, unique: true },
-        password: { type: String, required: true },
-        image: { type: String, default: "" }, 
+        password: { type: String, required: false },
+        image: { type: String, default: "" },
         shipping_addresses: [shippingAddressSchema],
         role: { type: String, enum: ["user", "employee", "admin"], default: "user" },
         auto_restore_cart: {
             type: Boolean,
             default: true
-        }
+        },
+        otpCode: { type: String },
+        otpExpires: { type: Date },
     },
     { timestamps: true }
 );
 
 // Middleware để đảm bảo chỉ có một địa chỉ mặc định
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
     if (this.isModified('shipping_addresses')) {
         const defaultAddresses = this.shipping_addresses.filter(addr => addr.is_default);
         if (defaultAddresses.length > 1) {

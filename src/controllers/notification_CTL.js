@@ -8,10 +8,10 @@ export const getAllNotifications = async (req, res) => {
         // Lọc thông báo dựa trên role
         if (req.user.role === 'admin' || req.user.role === 'employee') {
             // Admin và Employee chỉ nhận thông báo tồn kho và đơn hàng mới
-            query.type = { $in: ['low_stock', 'new_order', 'voucher', 'back_in_stock', 'order_status', 'product_new_user', 'product_new_admin','voucher_new_user','voucher_new_admin','out_of_stock'], };
+            query.type = { $in: ['low_stock', 'new_order', 'voucher', 'back_in_stock', 'order_status', 'product_new_user', 'product_new_admin', 'voucher_new_user', 'voucher_new_admin', 'out_of_stock', 'contact_new_admin'], };
         } else {
             // User thường nhận thêm thông báo trạng thái đơn hàng
-            query.type = { $in: ['voucher', 'back_in_stock', 'order_status', 'product_new_user','voucher_new_user','out_of_stock'] };
+            query.type = { $in: ['voucher', 'back_in_stock', 'order_status', 'product_new_user', 'voucher_new_user', 'out_of_stock'] };
         }
 
         const notifications = await Notification.find(query)
@@ -99,7 +99,7 @@ export const markAllAsRead = async (req, res) => {
 
         // Lọc thông báo dựa trên role khi đánh dấu đã đọc
         if (req.user.role === 'admin' || req.user.role === 'employee') {
-            query.type = { $in: ['low_stock', 'new_order', 'voucher', 'back_in_stock', 'order_status', 'product_new_user'] };
+            query.type = { $in: ['low_stock', 'new_order', 'voucher', 'back_in_stock', 'order_status', 'product_new_user', 'contact_new_admin'] };
         } else {
             query.type = { $in: ['voucher', 'back_in_stock', 'order_status', 'product_new_user'] };
         }
@@ -152,7 +152,7 @@ export const deleteAllRead = async (req, res) => {
 
         // Lọc thông báo dựa trên role khi xóa
         if (req.user.role === 'admin' || req.user.role === 'employee') {
-            query.type = { $in: ['low_stock', 'new_order', 'voucher', 'back_in_stock', 'order_status', 'product_new_user'] };
+            query.type = { $in: ['low_stock', 'new_order', 'voucher', 'back_in_stock', 'order_status', 'product_new_user', 'contact_new_admin'] };
         } else {
             query.type = { $in: ['voucher', 'back_in_stock', 'order_status', 'product_new_user'] };
         }

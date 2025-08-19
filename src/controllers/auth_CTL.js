@@ -6,12 +6,14 @@ import { tokenBlacklist } from "../middleware/auth_MID";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from 'url';
+import { OAuth2Client } from "google-auth-library";
+import { sendOTP } from "../middleware/sendMail_MID";
 
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: './.env' });
-
 
 export const register = async (req, res) => {
     try {
@@ -120,6 +122,153 @@ export const logout = async (req, res) => {
     }
 }
 
+// đăng nhập bằng Google
+export const loginWithGoogle = async (req, res) => {
+    try {
+        const { idToken } = req.body; // token từ frontend gửi lên
+
+        if (!idToken) {
+            return res.status(400).json({ message: "Thiếu Google ID Token" });
+        }
+
+        // xác thực token với Google
+        const ticket = await client.verifyIdToken({
+            idToken,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const { sub, email, name, picture } = payload; // sub = googleId
+
+        // tìm user trong DB
+        let user = await user_MD.findOne({ email });
+
+        if (!user) {
+            // nếu chưa có thì tạo mới
+            user = await user_MD.create({
+                user_id: Date.now().toString(),
+                username: name,
+                email,
+                googleId: sub,
+                avatar: picture,
+                role: "user"
+            });
+        }
+
+        // tạo token hệ thống
+        const token = jwt.sign({ userId: user._id }, process.env.KEY_SECRET, { expiresIn: "1w" });
+
+        return res.status(200).json({
+            message: "Đăng nhập Google thành công",
+            user: { ...user.toObject(), password: undefined },
+            token
+        });
+
+    } catch (error) {
+        console.error("Google Login error:", error);
+        return res.status(500).json({ message: "Đăng nhập Google thất bại", error: error.message });
+    }
+};
+
+// Gửi OTP để đăng nhập
+export const requestLoginOTP = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        const user = await user_MD.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: "Email chưa đăng ký" });
+        }
+
+        // tạo OTP ngẫu nhiên 6 số
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        user.otpCode = otp;
+        user.otpExpires = new Date(Date.now() + 5 * 60 * 1000); // hết hạn sau 5 phút
+        await user.save();
+
+        await sendOTP(email, otp);
+
+        return res.status(200).json({ message: "OTP đã được gửi đến email" });
+    } catch (error) {
+        return res.status(500).json({ message: "Gửi OTP thất bại", error: error.message });
+    }
+};
+
+// Yêu cầu OTP để reset mật khẩu
+export const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await user_MD.findOne({ email });
+        if (!user) return res.status(404).json({ message: "Email không tồn tại" });
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        user.otpCode = otp;
+        user.otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+        await user.save();
+
+        await sendOTP(email, otp);
+
+        return res.status(200).json({ message: "OTP đặt lại mật khẩu đã gửi qua email" });
+    } catch (error) {
+        return res.status(500).json({ message: "Gửi OTP thất bại", error: error.message });
+    }
+};
+
+// Reset mật khẩu với OTP
+export const resetPassword = async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+
+        const user = await user_MD.findOne({ email });
+        if (!user) return res.status(404).json({ message: "Người dùng không tồn tại" });
+
+        if (user.otpCode !== otp || user.otpExpires < Date.now()) {
+            return res.status(400).json({ message: "OTP không hợp lệ hoặc đã hết hạn" });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        user.password = hashedPassword;
+        user.otpCode = null;
+        user.otpExpires = null;
+        await user.save();
+
+        return res.status(200).json({ message: "Đặt lại mật khẩu thành công" });
+    } catch (error) {
+        return res.status(500).json({ message: "Đặt lại mật khẩu thất bại", error: error.message });
+    }
+};
+
+// Xác thực OTP để đăng nhập
+export const verifyLoginOTP = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        const user = await user_MD.findOne({ email });
+        if (!user) return res.status(404).json({ message: "Người dùng không tồn tại" });
+
+        if (user.otpCode !== otp || user.otpExpires < Date.now()) {
+            return res.status(400).json({ message: "OTP không hợp lệ hoặc đã hết hạn" });
+        }
+
+        // xoá OTP sau khi dùng
+        user.otpCode = null;
+        user.otpExpires = null;
+        await user.save();
+
+        // tạo JWT
+        const token = jwt.sign({ userId: user._id }, process.env.KEY_SECRET, { expiresIn: "1w" });
+
+        return res.status(200).json({
+            message: "Đăng nhập bằng OTP thành công",
+            user: { ...user.toObject(), password: undefined },
+            token
+        });
+    } catch (error) {
+        return res.status(500).json({ message: "Xác thực OTP thất bại", error: error.message });
+    }
+};
+
 // lấy thông tin người dùng
 export const getProfile = async (req, res) => {
     try {
@@ -128,8 +277,10 @@ export const getProfile = async (req, res) => {
             return res.status(401).json({ message: "Người dùng không tồn tại" });
         }
 
+        const passwordLength = user.password ? user.password.length : 0;
+
         return res.status(200).json({
-            user: { ...user.toObject(), password: undefined },
+            user: { ...user.toObject(), passwordLength },
             message: "Lấy thông tin người dùng thành công"
         });
     } catch (error) {
@@ -151,6 +302,34 @@ export const getAllUsers = async (req, res) => {
         });
     } catch (error) {
         return res.status(500).json({ message: "Lấy danh sách người dùng thất bại", error });
+    }
+};
+
+// Thay đổi mật khẩu
+export const changePassword = async (req, res) => {
+    try {
+        const { oldPassword, newPassword } = req.body;
+
+        // Lấy user từ token (đã đăng nhập)
+        const user = await user_MD.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: "Người dùng không tồn tại" });
+        }
+
+        // Kiểm tra mật khẩu cũ
+        const isMatch = await bcrypt.compare(oldPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Mật khẩu cũ không chính xác" });
+        }
+
+        // Mã hoá mật khẩu mới
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        user.password = hashedPassword;
+        await user.save();
+
+        return res.status(200).json({ message: "Thay đổi mật khẩu thành công" });
+    } catch (error) {
+        return res.status(500).json({ message: "Lỗi server khi thay đổi mật khẩu" });
     }
 };
 
