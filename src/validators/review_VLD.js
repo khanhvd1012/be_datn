@@ -6,6 +6,13 @@ Filter.add(['địt', 'lồn', 'cặc', 'đụ', 'bú', 'dcm', 'dm', 'đm']);
 
 // Schema cho tạo mới review (bắt buộc product_id và order_id)
 const createReviewSchema = Joi.object({
+    product_variant_id: Joi.string()
+        .pattern(/^[0-9a-fA-F]{24}$/)
+        .required()
+        .messages({
+            'string.pattern.base': 'Định dạng ID sản phẩm không hợp lệ',
+            'string.empty': 'ID sản phẩm không được để trống'
+        }),
     product_id: Joi.string()
         .pattern(/^[0-9a-fA-F]{24}$/)
         .required()

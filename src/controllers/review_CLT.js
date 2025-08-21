@@ -12,6 +12,14 @@ export const getProductReviews = async (req, res) => {
             .populate({
                 path: "user_id",
                 select: "username image"
+            })
+            .populate({
+                path: "product_variant_id",
+                select: "color",
+                populate: {
+                    path: "size",
+                    select: "size"
+                }
             });
         // Gắn purchasedOrders vào từng review theo user_id
         const reviewsWithOrders = await Promise.all(
@@ -71,7 +79,65 @@ export const getProductReviews = async (req, res) => {
     }
 }
 
-// lấy tất cả đánh giá
+// Lấy tất cả đánh giá của chính user hiện tại
+export const getMyReviews = async (req, res) => {
+    try {
+        const { page = 1, limit = 20 } = req.query;
+        const skip = (page - 1) * limit;
+
+        const reviews = await review_MD.find({ user_id: req.user._id })
+            .populate({
+                path: "order_item",
+                populate: [
+                    {
+                        path: "order_id",
+                        select: "status"
+                    },
+                    {
+                        path: "product_id",
+                        select: "name"
+                    },
+                    {
+                        path: "variant_id",
+                        select: "color",
+                        populate: {
+                            path: "size",
+                            select: "size"
+                        }
+                    }
+                ]
+            })
+            .populate({
+                path: "product_id",
+                select: "name"
+            })
+            .populate({
+                path: "product_variant_id",
+                select: "color",
+                populate: {
+                    path: "size",
+                    select: "size"
+                }
+            })
+            .skip(skip)
+            .limit(Number(limit))
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            reviews
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Lỗi khi lấy đánh giá của chính bạn",
+            error: error.message
+        });
+    }
+};
+ 
+
+ // lấy tất cả đánh giá
 export const getAllReviews = async (req, res) => {
     try {
         const { page = 1, limit = 20 } = req.query;
@@ -134,7 +200,7 @@ export const getAllReviews = async (req, res) => {
 // tạo đánh giá sản phẩm
 export const createReview = async (req, res) => {
     try {
-        const { product_id, rating, comment, order_id } = req.body;
+        const { product_id, product_variant_id, rating, comment, order_id } = req.body;
 
         // Kiểm tra đơn hàng đã giao thành công chứa sản phẩm này
         const deliveredOrder = await Order.findOne({
@@ -150,36 +216,39 @@ export const createReview = async (req, res) => {
             });
         }
 
-        // Tìm order_item tương ứng với sản phẩm trong đơn hàng đã giao
+        // Tìm order_item tương ứng với sản phẩm và biến thể trong đơn hàng đã giao
         const orderItem = await orderItem_MD.findOne({
             order_id: deliveredOrder._id,
-            product_id: product_id
+            product_id: product_id,
+            variant_id: product_variant_id
         });
 
         if (!orderItem) {
             return res.status(400).json({
                 success: false,
-                message: "Không tìm thấy thông tin đơn hàng cho sản phẩm này"
+                message: "Không tìm thấy thông tin đơn hàng cho sản phẩm và biến thể này"
             });
         }
 
-        // Kiểm tra đã đánh giá order_item này chưa
+        // Kiểm tra đã đánh giá order_item này chưa (dựa trên cả product_id và product_variant_id)
         const existedReview = await review_MD.findOne({
             user_id: req.user._id,
             product_id,
+            product_variant_id,
             order_item: orderItem._id
         });
 
         if (existedReview) {
             return res.status(400).json({
                 success: false,
-                message: "Bạn đã đánh giá cho lượt mua này rồi"
+                message: "Bạn đã đánh giá cho lượt mua biến thể này rồi"
             });
         }
 
         const review = await review_MD.create({
             user_id: req.user._id,
             product_id,
+            product_variant_id,
             rating,
             comment,
             order_item: orderItem._id
