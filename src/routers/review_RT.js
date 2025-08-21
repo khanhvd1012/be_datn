@@ -1,10 +1,12 @@
 import { Router } from "express"
-import { createReview, updateReview, deleteReview, getProductReviews, adminReplyReview, getAllReviews, } from "../controllers/review_CLT"
+import { createReview, updateReview, deleteReview, getProductReviews, adminReplyReview, getAllReviews, getMyReviews, } from "../controllers/review_CLT"
 import { validateReview } from "../validators/review_VLD"
 import authMiddleware from "../middleware/auth_MID"
 const reviewRouter = Router()
 
+reviewRouter.get("/user", authMiddleware, getMyReviews)
 reviewRouter.get("/:product_id", getProductReviews)
+
 reviewRouter.post("/", authMiddleware, validateReview, createReview)
 reviewRouter.get("/", getAllReviews)
 
@@ -12,5 +14,6 @@ reviewRouter.get("/", getAllReviews)
 reviewRouter.post("/:id", authMiddleware, adminReplyReview)
 reviewRouter.put("/:id", authMiddleware, validateReview, updateReview)
 reviewRouter.delete("/:id", authMiddleware, deleteReview)
+
 
 export default reviewRouter
