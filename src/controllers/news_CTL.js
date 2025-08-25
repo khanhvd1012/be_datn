@@ -88,40 +88,62 @@ export const updateNews = async (req, res) => {
   try {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      if (req.files) deleteImages(req.files.map((f) => `http://localhost:3000/uploads/${f.filename}`));
+      if (req.files) deleteImages(req.files.map(f => `http://localhost:3000/uploads/${f.filename}`));
       return res.status(400).json({ message: "ID không hợp lệ" });
     }
 
     const news = await news_MD.findById(id);
     if (!news) {
-      if (req.files) deleteImages(req.files.map((f) => `http://localhost:3000/uploads/${f.filename}`));
+      if (req.files) deleteImages(req.files.map(f => `http://localhost:3000/uploads/${f.filename}`));
       return res.status(404).json({ message: "Tin tức không tồn tại" });
     }
 
-    let newImages = news.images;
+    let imageUrls = [...(news.images || [])]; // mặc định giữ lại ảnh cũ
 
-    if (req.files && req.files.length > 0) {
-      // Xoá ảnh cũ
-      if (news.images && news.images.length > 0) {
-        deleteImages(news.images);
+    // Nếu client gửi existingImages => chỉ giữ lại đúng các ảnh đó
+    if (req.body.existingImages) {
+      if (typeof req.body.existingImages === "string") {
+        imageUrls = [req.body.existingImages];
+      } else if (Array.isArray(req.body.existingImages)) {
+        imageUrls = req.body.existingImages;
       }
 
-      // Gán ảnh mới
-      newImages = req.files.map((file) => `http://localhost:3000/uploads/${file.filename}`);
+      // Xoá ảnh không còn giữ lại
+      const removedImages = (news.images || []).filter(
+        oldUrl => !imageUrls.includes(oldUrl)
+      );
+      if (removedImages.length > 0) {
+        deleteImages(removedImages);
+      }
     }
+
+    // Nếu có ảnh mới, thêm vào
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+      imageUrls = [...imageUrls, ...newImages];
+    }
+
+    // Bỏ existingImages ra khỏi body để tránh lưu thừa
+    delete req.body.existingImages;
 
     const updated = await news_MD.findByIdAndUpdate(
       id,
-      { ...req.body, images: newImages },
+      { ...req.body, images: imageUrls },
       { new: true }
     );
 
-    res.status(200).json({ message: "Cập nhật tin tức thành công", data: updated });
+    return res.status(200).json({
+      message: "Cập nhật tin tức thành công",
+      data: updated,
+    });
   } catch (error) {
-    if (req.files) deleteImages(req.files.map((f) => `http://localhost:3000/uploads/${f.filename}`));
+    // Nếu có upload ảnh mới mà bị lỗi thì xoá đi để tránh rác
+    if (req.files) {
+      deleteImages(req.files.map(f => `http://localhost:3000/uploads/${f.filename}`));
+    }
 
     console.error("Lỗi khi cập nhật tin tức:", error);
-    res.status(500).json({ message: "Lỗi máy chủ nội bộ" });
+    return res.status(500).json({ message: "Lỗi máy chủ nội bộ" });
   }
 };
 

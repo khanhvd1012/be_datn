@@ -248,7 +248,6 @@ export const updateVariant = async (req, res) => {
     }
 };
 
-
 export const getAllVariants = async (req, res) => {
     try {
         const { hideOutOfStock } = req.query;

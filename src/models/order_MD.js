@@ -60,6 +60,7 @@ const orderSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    app_trans_id: { type: String, required: true },  
     cancel_reason: {
         type: String,
         default: null

@@ -3,6 +3,7 @@ import cors from 'cors';             // Middleware xử lý CORS
 import connectDB from './src/config/db'; // Module kết nối MongoDB
 import dotenv from 'dotenv';         // Quản lý biến môi trường
 import router from './src/routers';
+import { zaloPayCallback } from './src/controllers/order_CTL';
 
 dotenv.config({ path: './.env' });
 
@@ -11,6 +12,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('public/uploads'));
+app.post("/payment/zalopay/callback", zaloPayCallback);
 
 app.use('/api', router);
 
