@@ -15,6 +15,8 @@ const userSchema = new mongoose.Schema(
         password: { type: String, required: false },
         image: { type: String, default: "" },
         shipping_addresses: [shippingAddressSchema],
+        isBlocked: { type: Boolean, default: false }, 
+        blockReason: { type: String, default: "" }, 
         role: { type: String, enum: ["user", "employee", "admin"], default: "user" },
         auto_restore_cart: {
             type: Boolean,

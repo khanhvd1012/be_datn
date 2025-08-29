@@ -20,12 +20,12 @@ import { setProductTimeout, clearProductTimeout } from '../middleware/timeoutReg
 const sendNewProductNotificationToAdmins = async (product) => {
     try {
         // Lấy danh sách tất cả admin
-        const admins = await User.find({ 
+        const admins = await User.find({
             $or: [
                 { role: 'admin' }
             ]
         });
-        
+
         if (admins.length === 0) {
             console.log('Không tìm thấy admin nào để gửi thông báo');
             return;
@@ -52,7 +52,7 @@ const sendNewProductNotificationToAdmins = async (product) => {
         // Bulk insert để tối ưu performance
         await Notification.insertMany(notifications);
         console.log(`Đã gửi thông báo sản phẩm mới "${product.name}" cho ${admins.length} admin(s)`);
-        
+
     } catch (error) {
         console.error('Lỗi khi gửi thông báo sản phẩm mới cho admin:', error);
         // Không throw error để không ảnh hưởng đến việc tạo sản phẩm
@@ -191,7 +191,7 @@ export const createProduct = async (req, res, next) => {
             .populate('brand', 'name');
 
         // Gửi thông báo cho admin ngay sau khi tạo sản phẩm thành công
-        
+
         // Chạy bất đồng bộ để không ảnh hưởng đến response time
         setImmediate(async () => {
             await sendNewProductNotificationToAdmins({
@@ -208,7 +208,7 @@ export const createProduct = async (req, res, next) => {
                 ...populatedProduct.toObject()
             });
         }, 36000); // 1 giờ
-        
+
         setProductTimeout(product._id, timeoutId);
 
         return res.status(201).json({
@@ -431,6 +431,49 @@ export const getProductBySlug = async (req, res) => {
             error: error.message
         });
     }
+};
+
+export const getRelatedProducts = async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    // Tìm sản phẩm hiện tại theo slug
+    const product = await Product.findOne({ slug }).populate("category");
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy sản phẩm",
+      });
+    }
+
+    // Lấy sản phẩm liên quan trong cùng category (ngoại trừ chính nó)
+    const relatedProducts = await Product.find({
+      category: product.category._id,
+      _id: { $ne: product._id },
+    })
+      .limit(10)
+      .populate("brand")
+      .populate("category")
+      .populate({
+        path: "variants",
+        populate: [
+          { path: "size" },   // nếu Variant có tham chiếu tới Size
+          { path: "color" },  // nếu Variant có tham chiếu tới Color
+        ],
+      });
+
+    return res.status(200).json({
+      success: true,
+      data: relatedProducts,
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy sản phẩm liên quan:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ",
+      error: error.message,
+    });
+  }
 };
 
 const sendNewProductNotificationToCustomers = async (product) => {

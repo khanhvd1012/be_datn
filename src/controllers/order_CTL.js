@@ -11,6 +11,7 @@ import Notification from "../models/notification_MD";
 import moment from 'moment';
 import crypto from 'crypto';
 import axios from "axios";
+import { sendEmailOrder } from "../middleware/sendEmail";
 
 // tạo đơn hàng
 export const getAllOrderAdmin = async (req, res) => {
@@ -687,7 +688,9 @@ const config = {
 };
 
 export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id) => {
-    const embed_data = { redirecturl: "http://localhost:5173/checkout/success" };
+    const embed_data = {
+        redirecturl: "http://localhost:5173/checkout/result"
+    };
     const items = [];
 
     const order = {
@@ -700,15 +703,51 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
         embed_data: JSON.stringify(embed_data),
         description: `Thanh toán đơn hàng #${orderId}`,
         bank_code: "",
-        callback_url: "https://86e0d92a60ae.ngrok-free.app/payment/zalopay/callback"
+        callback_url: "https://dfa923302cb1.ngrok-free.app/payment/zalopay/callback",
     };
 
     const data = `${config.app_id}|${order.app_trans_id}|${order.app_user}|${order.amount}|${order.app_time}|${order.embed_data}|${order.item}`;
-
     order.mac = crypto.createHmac("sha256", config.key1).update(data).digest("hex");
 
     try {
         const response = await axios.post(config.endpoint, null, { params: order });
+
+        await Order_MD.findOneAndUpdate(
+            { app_trans_id },
+            {
+                user_id: userId,
+                order_id: orderId,
+                app_trans_id,
+                amount,
+                status: "pending",
+                payment_status: "unpaid",
+            },
+            { upsert: true, new: true }
+        );
+
+        //Sau 10 phút kiểm tra lại
+        setTimeout(async () => {
+            const orderCheck = await Order_MD.findOne({ app_trans_id });
+            if (orderCheck && orderCheck.payment_status !== "paid") {
+                // Query trạng thái từ ZaloPay trước khi hủy
+                const result = await queryZaloPayOrder(app_trans_id);
+                if (result.return_code === 1 && result.sub_return_code === 1) {
+                    orderCheck.payment_status = "paid";
+                    orderCheck.status = "processing";
+                    orderCheck.transaction_id = result.zp_trans_id;
+                    await orderCheck.save();
+                    console.log(`Order ${orderCheck._id} đã thanh toán (query API)`);
+                } else {
+                    orderCheck.status = "canceled";  
+                    orderCheck.payment_status = "canceled"; 
+                    orderCheck.cancel_reason = "Thanh toán không thành công";
+                    orderCheck.cancelled_at = new Date();
+                    await orderCheck.save();
+                    console.log(`Order ${orderCheck._id} bị hủy sau 10p không thanh toán`);
+                }
+            }
+        }, 1 * 60 * 1000);
+
         return { ...response.data, app_trans_id };
     } catch (error) {
         console.error("ZaloPay Error:", error?.response?.data || error.message);
@@ -718,11 +757,8 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
 
 export const zaloPayCallback = async (req, res) => {
     try {
-        const { data, mac } = req.body;
-        const key2 = config.key2; // lấy từ config thay vì hardcode
-
-        // Verify MAC
-        const hash = crypto.createHmac("sha256", key2).update(data).digest("hex");
+        const { data, mac, type } = req.body;
+        const hash = crypto.createHmac("sha256", config.key2).update(data).digest("hex");
         if (mac !== hash) {
             return res.json({ return_code: -1, return_message: "Invalid MAC" });
         }
@@ -730,27 +766,68 @@ export const zaloPayCallback = async (req, res) => {
         const callbackData = JSON.parse(data);
         const { app_trans_id, zp_trans_id } = callbackData;
 
-        // Tìm đơn hàng theo app_trans_id
-        const order = await Order_MD.findOne({ app_trans_id: callbackData.app_trans_id });
+        const order = await Order_MD.findOne({ app_trans_id }).populate({
+            path: "user_id",
+            select: "shipping_addresses email username",
+        });
+
         if (!order) {
             return res.json({ return_code: -1, return_message: "Không tìm thấy đơn hàng" });
         }
 
-        // Nếu chưa thanh toán thì cập nhật
-        if (order.payment_status !== "paid") {
-            order.payment_status = "paid";
-            order.transaction_id = zp_trans_id;
-            await order.save();
+        if (type === 1) {
+            if (order.payment_status !== "paid") {
+                order.payment_status = "paid";
+                order.status = "processing";
+                order.transaction_id = zp_trans_id;
+                await order.save();
 
-            // Xóa giỏ hàng
-            await CartItem_MD.deleteMany({ cart_id: order.cart_id });
-            await Cart_MD.findByIdAndUpdate(order.cart_id, { cart_items: [] });
+                const user = await User_MD.findById(order.user_id);
+                const orderItems = await OrderItem_MD.find({ order_id: order._id })
+                    .populate("product_id")
+                    .populate({
+                        path: "variant_id",
+                        populate: [
+                            { path: "color", select: "name" },
+                            { path: "size", select: "size" },
+                        ],
+                    });
+
+                await sendEmailOrder(user.email, order, orderItems);
+
+                // Xóa giỏ hàng
+                await CartItem_MD.deleteMany({ cart_id: order.cart_id });
+                await Cart_MD.findByIdAndUpdate(order.cart_id, { cart_items: [] });
+            }
         }
 
         return res.json({ return_code: 1, return_message: "success" });
     } catch (error) {
-        console.error("ZaloPay callback error:", error);
+        console.error("🔥 ZaloPay callback error:", error);
         return res.json({ return_code: -1, return_message: "Lỗi server" });
+    }
+};
+
+export const queryZaloPayOrder = async (app_trans_id) => {
+    try {
+        const data = {
+            app_id: config.app_id,
+            app_trans_id,
+        };
+
+        const dataStr = `${data.app_id}|${data.app_trans_id}|${config.key1}`;
+        data.mac = crypto.createHmac("sha256", config.key1).update(dataStr).digest("hex");
+
+        const response = await axios.post(
+            "https://sandbox.zalopay.com.vn/v001/tpe/getstatusbyapptransid",
+            null,
+            { params: data }
+        );
+
+        return response.data;
+    } catch (err) {
+        console.error("🔥 ZaloPay query error:", err?.response?.data || err.message);
+        return { return_code: -1, return_message: "Lỗi kết nối ZaloPay" };
     }
 };
 

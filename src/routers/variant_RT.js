@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createVariant, deleteVariant, getAllVariants, getTopRatedVariants, getTopSellingVariants, getVariantById, updateVariant } from "../controllers/variant_CTL";
+import { createVariant, deleteVariant, getAllVariants, getRelatedVariants, getTopRatedVariants, getTopSellingVariants, getVariantById, updateVariant } from "../controllers/variant_CTL";
 import { validateVariant } from "../validators/variant_VLD";
 import authMiddleware from "../middleware/auth_MID";
 import checkRole from "../middleware/checkRole_MID";

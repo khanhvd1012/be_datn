@@ -12,7 +12,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('public/uploads'));
-app.post("/payment/zalopay/callback", zaloPayCallback);
+app.post("/payment/zalopay/callback", (req, res) => {
+    console.log("📩 Callback nhận được:", req.body);
+    res.json({ return_code: 1, return_message: "success" });
+}, zaloPayCallback);
 
 app.use('/api', router);
 

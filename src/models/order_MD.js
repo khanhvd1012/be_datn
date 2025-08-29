@@ -60,7 +60,15 @@ const orderSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    app_trans_id: { type: String, required: true },  
+    payment_status: {
+        type: String,
+        enum: {
+            values: ['unpaid', 'paid', 'failed', 'canceled', 'refunded'],
+            message: 'Trạng thái thanh toán {VALUE} không hợp lệ'
+        },
+        default: 'unpaid'
+    },
+    app_trans_id: { type: String, required: true },
     cancel_reason: {
         type: String,
         default: null

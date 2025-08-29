@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from 'url';
 import { OAuth2Client } from "google-auth-library";
-import { sendOTP } from "../middleware/sendMail_MID";
+import { sendEmailBlock, sendOTP } from "../middleware/sendEmail";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const __filename = fileURLToPath(import.meta.url);
@@ -70,6 +70,13 @@ export const login = async (req, res) => {
         const user = await user_MD.findOne({ email });
         if (!user) {
             return res.status(401).json({ message: "Email không tồn tại" });
+        }
+
+        if (user.isBlocked) {
+            return res.status(403).json({
+                message: `Tài khoản của bạn đã bị khoá. ${user.blockReason ? "Lý do: " + user.blockReason : ""
+                    }`
+            });
         }
 
         // kiểm tra password có chính xác không
@@ -152,6 +159,14 @@ export const loginWithGoogle = async (req, res) => {
                 googleId: sub,
                 avatar: picture,
                 role: "user"
+            });
+        }
+
+        if (user.isBlocked) {
+            return res.status(403).json({
+                message: `Tài khoản của bạn đã bị khoá. ${
+                    user.blockReason ? "Lý do: " + user.blockReason : ""
+                }`
             });
         }
 
@@ -302,6 +317,60 @@ export const getAllUsers = async (req, res) => {
         });
     } catch (error) {
         return res.status(500).json({ message: "Lấy danh sách người dùng thất bại", error });
+    }
+};
+
+export const toggleBlockUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body; // nhận lý do từ body khi khoá
+
+        const user = await user_MD.findById(id);
+        if (!user) {
+            return res.status(404).json({ message: "Người dùng không tồn tại" });
+        }
+
+        if (!user.isBlocked) {
+            if (!reason) {
+                return res.status(400).json({ message: "Cần cung cấp lý do khi khoá tài khoản" });
+            }
+            user.isBlocked = true;
+            user.blockReason = reason;
+
+            // gửi email khi khoá
+            await sendEmailBlock(
+                user.email,
+                "Thông báo: Tài khoản của bạn đã bị khoá",
+                `
+          <p>Xin chào <b>${user.username}</b>,</p>
+          <p>Tài khoản của bạn đã bị <b>khoá</b> vì lý do: <i>${reason}</i>.</p>
+          <p>Nếu bạn cần hỗ trợ, vui lòng liên hệ với chúng tôi.</p>
+        `
+            );
+        } else {
+            user.isBlocked = false;
+            user.blockReason = "";
+
+            // gửi email khi mở khoá
+            await sendEmailBlock(
+                user.email,
+                "Thông báo: Tài khoản của bạn đã được mở khoá",
+                `
+          <p>Xin chào <b>${user.username}</b>,</p>
+          <p>Tài khoản của bạn đã được <b>mở khoá</b> và bạn có thể đăng nhập lại bình thường.</p>
+          <p>Cảm ơn bạn đã đồng hành cùng Sneaker Trend.</p>
+        `
+            );
+        }
+
+        await user.save();
+
+        return res.status(200).json({
+            message: user.isBlocked ? "Đã khoá tài khoản và gửi email" : "Đã mở khoá tài khoản và gửi email",
+            data: user,
+        });
+    } catch (error) {
+        return res.status(500).json({ message: "Lỗi server", error });
     }
 };
 

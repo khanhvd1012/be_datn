@@ -9,7 +9,6 @@ import StockHistory from "../models/stockHistory_MD";
 import Size from "../models/size_MD";
 import review_MD from "../models/review_MD";
 import OrderItem from "../models/orderItem_MD"
-import mongoose from "mongoose";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -457,7 +456,6 @@ export const getTopSellingVariants = async (req, res, next) => {
             },
             { $unwind: { path: "$color", preserveNullAndEmptyArrays: true } },
 
-            // Chọn các trường cần thiết
             {
                 $project: {
                     _id: "$variant._id",
@@ -469,7 +467,12 @@ export const getTopSellingVariants = async (req, res, next) => {
                     product_id: "$product._id",
                     product_name: "$product.name",
                     product_slug: "$product.slug",
-                    color: "$color", // sẽ là object { _id, name, code }
+                    color: {
+                        _id: "$color._id",
+                        name: "$color.name",
+                        code: "$color.code",
+                        description: "$color.description",
+                    }, 
                     totalSold: 1,
                 },
             },
@@ -529,7 +532,7 @@ export const getTopRatedVariants = async (req, res, next) => {
             { $unwind: "$size" },
             {
                 $project: {
-                    _id: "$variant._id", 
+                    _id: "$variant._id",
                     sku: "$variant.sku",
                     price: "$variant.price",
                     image_url: "$variant.image_url",
