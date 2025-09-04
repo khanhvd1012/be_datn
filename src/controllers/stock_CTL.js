@@ -93,7 +93,7 @@ export const getAllStock = async (req, res) => {
 
 export const updateStock = async (req, res) => {
     try {
-        const { quantity_change, reason } = req.body;
+        const { quantity_change, reason, status } = req.body;
 
         const stock = await Stock_MD.findById(req.params.id);
         if (!stock) {
@@ -108,10 +108,14 @@ export const updateStock = async (req, res) => {
 
         const product = variant.product_id;
         const oldQuantity = stock.quantity;
-        const newQuantity = stock.quantity + parseInt(quantity_change);
+        const isStatusOnlyUpdate = (quantity_change === undefined || quantity_change === null || quantity_change === '') && (status === 'inStock' || status === 'outOfStock' || status === 'paused');
+        const parsedChange = quantity_change !== undefined && quantity_change !== null && quantity_change !== ''
+            ? parseInt(quantity_change)
+            : 0;
+        const newQuantity = isStatusOnlyUpdate ? oldQuantity : stock.quantity + parsedChange;
 
         // Không cho phép số lượng âm
-        if (newQuantity < 0) {
+        if (!isStatusOnlyUpdate && newQuantity < 0) {
             return res.status(400).json({ message: 'Số lượng tồn kho không thể âm' });
         }
 
@@ -123,8 +127,8 @@ export const updateStock = async (req, res) => {
         // Tạo lịch sử tồn kho
         await stockHistory_MD.create({
             stock_id: stock._id,
-            quantity_change: quantity_change,
-            reason: reason || 'Cập nhật số lượng',
+            quantity_change: isStatusOnlyUpdate ? 0 : parsedChange,
+            reason: reason || (isStatusOnlyUpdate ? 'Cập nhật trạng thái tồn kho' : 'Cập nhật số lượng'),
             updated_by: req.user._id
         });
 
@@ -132,7 +136,7 @@ export const updateStock = async (req, res) => {
         // 1. Số lượng mới <= ngưỡng cảnh báo
         // 2. Số lượng cũ > ngưỡng cảnh báo (tránh spam khi đã low stock)
         // 3. Số lượng mới > 0 (không cảnh báo khi hết hàng hoàn toàn)
-        if (newQuantity <= LOW_STOCK_THRESHOLD && oldQuantity > LOW_STOCK_THRESHOLD && newQuantity > 0) {
+        if (!isStatusOnlyUpdate && newQuantity <= LOW_STOCK_THRESHOLD && oldQuantity > LOW_STOCK_THRESHOLD && newQuantity > 0) {
             // Tạo thông báo cho tất cả admin và employee
             const adminsAndEmployees = await User_MD.find({ role: { $in: ['admin', 'employee'] } });
 
@@ -161,14 +165,23 @@ export const updateStock = async (req, res) => {
             }
         }
 
-        // Nếu số lượng tồn kho bằng 0, cập nhật trạng thái thành outOfStock
-        if (newQuantity === 0) {
-            await variant_MD.findByIdAndUpdate(stock.product_variant_id, { status: 'outOfStock' });
-        }
+        // Cập nhật trạng thái: ưu tiên theo status truyền vào, nếu không có thì dựa theo số lượng
+        if (status === 'inStock' || status === 'outOfStock' || status === 'paused') {
+            await variant_MD.findByIdAndUpdate(stock.product_variant_id, { status });
+        } else {
+            // Auto trạng thái chỉ áp dụng nếu variant không đang 'paused'
+            const variantDoc = await variant_MD.findById(stock.product_variant_id).select('status');
+            if (variantDoc && variantDoc.status !== 'paused') {
+                // Nếu số lượng tồn kho bằng 0, cập nhật trạng thái thành outOfStock
+                if (newQuantity === 0) {
+                    await variant_MD.findByIdAndUpdate(stock.product_variant_id, { status: 'outOfStock' });
+                }
 
-        // Nếu sản phẩm có hàng trở lại, cập nhật trạng thái thành inStock
-        if (newQuantity > 0 && oldQuantity === 0) {
-            await variant_MD.findByIdAndUpdate(stock.product_variant_id, { status: 'inStock' });
+                // Nếu sản phẩm có hàng trở lại, cập nhật trạng thái thành inStock
+                if (newQuantity > 0 && oldQuantity === 0) {
+                    await variant_MD.findByIdAndUpdate(stock.product_variant_id, { status: 'inStock' });
+                }
+            }
         }
 
         return res.status(200).json({
