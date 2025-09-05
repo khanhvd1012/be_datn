@@ -434,46 +434,46 @@ export const getProductBySlug = async (req, res) => {
 };
 
 export const getRelatedProducts = async (req, res) => {
-  try {
-    const { slug } = req.params;
+    try {
+        const { slug } = req.params;
 
-    // Tìm sản phẩm hiện tại theo slug
-    const product = await Product.findOne({ slug }).populate("category");
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy sản phẩm",
-      });
+        // Tìm sản phẩm hiện tại theo slug
+        const product = await Product.findOne({ slug }).populate("category");
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy sản phẩm",
+            });
+        }
+
+        // Lấy sản phẩm liên quan trong cùng category (ngoại trừ chính nó)
+        const relatedProducts = await Product.find({
+            category: product.category._id,
+            _id: { $ne: product._id },
+        })
+            .limit(10)
+            .populate("brand")
+            .populate("category")
+            .populate({
+                path: "variants",
+                populate: [
+                    { path: "size" },   // nếu Variant có tham chiếu tới Size
+                    { path: "color" },  // nếu Variant có tham chiếu tới Color
+                ],
+            });
+
+        return res.status(200).json({
+            success: true,
+            data: relatedProducts,
+        });
+    } catch (error) {
+        console.error("Lỗi khi lấy sản phẩm liên quan:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Lỗi máy chủ",
+            error: error.message,
+        });
     }
-
-    // Lấy sản phẩm liên quan trong cùng category (ngoại trừ chính nó)
-    const relatedProducts = await Product.find({
-      category: product.category._id,
-      _id: { $ne: product._id },
-    })
-      .limit(10)
-      .populate("brand")
-      .populate("category")
-      .populate({
-        path: "variants",
-        populate: [
-          { path: "size" },   // nếu Variant có tham chiếu tới Size
-          { path: "color" },  // nếu Variant có tham chiếu tới Color
-        ],
-      });
-
-    return res.status(200).json({
-      success: true,
-      data: relatedProducts,
-    });
-  } catch (error) {
-    console.error("Lỗi khi lấy sản phẩm liên quan:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Lỗi máy chủ",
-      error: error.message,
-    });
-  }
 };
 
 const sendNewProductNotificationToCustomers = async (product) => {
@@ -503,3 +503,75 @@ const sendNewProductNotificationToCustomers = async (product) => {
         console.error('Lỗi khi gửi thông báo sản phẩm mới cho khách hàng:', error);
     }
 };
+
+export const searchProducts = async (req, res) => {
+  try {
+    const { keyword } = req.query;
+    if (!keyword) {
+      return res.status(400).json({ message: "Vui lòng nhập từ khóa tìm kiếm" });
+    }
+
+    const terms = keyword.trim().split(/\s+/);
+    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regexTerms = terms.map(term => new RegExp(escapeRegex(term), "i"));
+
+    // Điều kiện: chỉ cần 1 từ khóa match bất kỳ field nào (OR thay vì AND)
+    const matchConditions = regexTerms.map(regex => ({
+      $or: [
+        { name: regex },
+        { "brand.name": regex },
+        { "category.name": regex },
+        { description: regex } // thêm cả mô tả cho phong phú
+      ]
+    }));
+
+    const products = await Product.aggregate([
+      // Join sang Brand
+      {
+        $lookup: {
+          from: "brands",
+          localField: "brand",
+          foreignField: "_id",
+          as: "brand"
+        }
+      },
+      { $unwind: { path: "$brand", preserveNullAndEmptyArrays: true } },
+
+      // Join sang Category
+      {
+        $lookup: {
+          from: "categories",
+          localField: "category",
+          foreignField: "_id",
+          as: "category"
+        }
+      },
+      { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
+
+      // Match theo OR (nới lỏng)
+      {
+        $match: { $or: matchConditions }
+      },
+
+      // Chọn field cần thiết
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          description: 1,
+          "brand._id": 1,
+          "brand.name": 1,
+          "category._id": 1,
+          "category.name": 1,
+          slug: 1,
+          variants: 1
+        }
+      }
+    ]);
+
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+

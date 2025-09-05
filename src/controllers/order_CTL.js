@@ -703,7 +703,7 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
         embed_data: JSON.stringify(embed_data),
         description: `Thanh toán đơn hàng #${orderId}`,
         bank_code: "",
-        callback_url: "https://dfa923302cb1.ngrok-free.app/payment/zalopay/callback",
+        callback_url: "https://3dfcbc70c821.ngrok-free.app/payment/zalopay/callback",
     };
 
     const data = `${config.app_id}|${order.app_trans_id}|${order.app_user}|${order.amount}|${order.app_time}|${order.embed_data}|${order.item}`;
@@ -725,7 +725,6 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
             { upsert: true, new: true }
         );
 
-        //Sau 10 phút kiểm tra lại
         setTimeout(async () => {
             const orderCheck = await Order_MD.findOne({ app_trans_id });
             if (orderCheck && orderCheck.payment_status !== "paid") {
@@ -736,14 +735,14 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
                     orderCheck.status = "processing";
                     orderCheck.transaction_id = result.zp_trans_id;
                     await orderCheck.save();
-                    console.log(`Order ${orderCheck._id} đã thanh toán (query API)`);
+                    console.log(`Order ${orderCheck._id} đã thanh toán`);
                 } else {
-                    orderCheck.status = "canceled";  
-                    orderCheck.payment_status = "canceled"; 
+                    orderCheck.status = "canceled";
+                    orderCheck.payment_status = "canceled";
                     orderCheck.cancel_reason = "Thanh toán không thành công";
                     orderCheck.cancelled_at = new Date();
                     await orderCheck.save();
-                    console.log(`Order ${orderCheck._id} bị hủy sau 10p không thanh toán`);
+                    console.log(`Order ${orderCheck._id} bị hủy sau 1p`);
                 }
             }
         }, 1 * 60 * 1000);
@@ -757,11 +756,14 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
 
 export const zaloPayCallback = async (req, res) => {
     try {
+        console.log("🔥 Nhận callback từ ZaloPay:", req.body);
         const { data, mac, type } = req.body;
+
         const hash = crypto.createHmac("sha256", config.key2).update(data).digest("hex");
         if (mac !== hash) {
             return res.json({ return_code: -1, return_message: "Invalid MAC" });
         }
+        console.error("MAC:", { mac, hash });
 
         const callbackData = JSON.parse(data);
         const { app_trans_id, zp_trans_id } = callbackData;
@@ -800,6 +802,7 @@ export const zaloPayCallback = async (req, res) => {
                 await Cart_MD.findByIdAndUpdate(order.cart_id, { cart_items: [] });
             }
         }
+        console.log("👉 Type callback:", type);
 
         return res.json({ return_code: 1, return_message: "success" });
     } catch (error) {
@@ -826,7 +829,7 @@ export const queryZaloPayOrder = async (app_trans_id) => {
 
         return response.data;
     } catch (err) {
-        console.error("🔥 ZaloPay query error:", err?.response?.data || err.message);
+        console.error("ZaloPay query error:", err?.response?.data || err.message);
         return { return_code: -1, return_message: "Lỗi kết nối ZaloPay" };
     }
 };

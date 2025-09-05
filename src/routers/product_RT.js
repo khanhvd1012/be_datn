@@ -9,6 +9,7 @@ import {
     getProductVariants,
     getProductBySlug,
     getRelatedProducts,
+    searchProducts,
 } from "../controllers/product_CTL";
 import authMiddleware from "../middleware/auth_MID";
 import checkRole from "../middleware/checkRole_MID";
