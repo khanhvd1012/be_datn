@@ -16,7 +16,6 @@ import { sendEmailOrder } from "../middleware/sendEmail";
 // tạo đơn hàng
 export const getAllOrderAdmin = async (req, res) => {
     try {
-        // Sửa populate: dùng 'items' (virtual field) thay vì 'order_items'
         const orders = await Order_MD.find()
             .populate({
                 path: 'items',
@@ -279,7 +278,7 @@ export const createOrder = async (req, res) => {
             await Notification.create({
                 user_id: adminUser._id,
                 title: 'Đơn hàng mới',
-                message: `Có đơn hàng mới từ khách hàng ${user.username || user.email}`,
+                message: `Có đơn hàng mới (#${order.order_code}) từ khách hàng ${user.username || user.email}`,
                 type: 'new_order',
                 data: {
                     order_id: order._id,
@@ -357,6 +356,58 @@ export const getAllOrderUser = async (req, res) => {
 }
 
 // lấy đơn hàng theo ID
+export const getOrderByIdAdmin = async (req, res) => {
+    try {
+        const order = await Order_MD.findOne({ _id: req.params.id })
+            .populate("user_id", "username email")
+            .populate({
+                path: "items",
+                populate: [
+                    {
+                        path: "product_id",
+                        select: "name"
+                    },
+                    {
+                        path: "variant_id",
+                        select: "price image",
+                        populate: {
+                            path: "color",
+                            select: "name"
+                        }
+                    }
+                ]
+            });
+
+        if (!order) {
+            return res.status(404).json({ message: "Đơn hàng không tồn tại" });
+        }
+
+        // Parse địa chỉ giao hàng đã dùng cho đơn (định dạng: "Họ tên - SĐT - Địa chỉ")
+        let shipping_address_detail = null;
+        if (order.shipping_address && typeof order.shipping_address === 'string') {
+            const parts = order.shipping_address.split(' - ').map(p => p?.trim());
+            if (parts.length >= 3) {
+                shipping_address_detail = {
+                    full_name: parts[0],
+                    phone: parts[1],
+                    address: parts.slice(2).join(' - ')
+                };
+            }
+        }
+
+        return res.status(200).json({
+            ...order.toObject(),
+            shipping_address_detail
+        });
+    } catch (error) {
+        console.error("Lỗi khi lấy đơn hàng:", error);
+        return res.status(500).json({
+            message: "Đã xảy ra lỗi khi lấy đơn hàng",
+            error: error.message
+        });
+    }
+}
+
 export const getOrderById = async (req, res) => {
     try {
         const order = await Order_MD.findOne({ _id: req.params.id })
@@ -383,7 +434,29 @@ export const getOrderById = async (req, res) => {
             return res.status(404).json({ message: "Đơn hàng không tồn tại" });
         }
 
-        return res.status(200).json(order);
+        // Chỉ cho phép user xem đơn hàng của chính họ
+        const isOwner = order.user_id && (order.user_id._id ? order.user_id._id.toString() : order.user_id.toString()) === req.user._id.toString();
+        if (!isOwner) {
+            return res.status(403).json({ message: "Bạn không có quyền xem đơn hàng này" });
+        }
+
+        // Parse địa chỉ giao hàng đã dùng cho đơn (định dạng: "Họ tên - SĐT - Địa chỉ")
+        let shipping_address_detail = null;
+        if (order.shipping_address && typeof order.shipping_address === 'string') {
+            const parts = order.shipping_address.split(' - ').map(p => p?.trim());
+            if (parts.length >= 3) {
+                shipping_address_detail = {
+                    full_name: parts[0],
+                    phone: parts[1],
+                    address: parts.slice(2).join(' - ')
+                };
+            }
+        }
+
+        return res.status(200).json({
+            ...order.toObject(),
+            shipping_address_detail
+        });
     } catch (error) {
         console.error("Lỗi khi lấy đơn hàng:", error);
         return res.status(500).json({
@@ -436,11 +509,30 @@ export const updateOrderStatus = async (req, res) => {
             });
         }
 
-        // Chỉ cho hoàn hàng khi đã giao
-        if (status === 'returned' && order.status !== 'delivered') {
-            return res.status(400).json({
-                message: "Chỉ có thể hoàn hàng khi đơn hàng đã được giao"
-            });
+        // Chỉ cho hoàn hàng khi đã giao và sau 7 ngày kể từ khi giao thành công
+        if (status === 'returned') {
+            if (order.status !== 'delivered') {
+                return res.status(400).json({
+                    message: "Chỉ có thể hoàn hàng khi đơn hàng đã được giao"
+                });
+            }
+
+            // Kiểm tra thời gian 7 ngày kể từ delivered_at
+            if (!order.delivered_at) {
+                return res.status(400).json({
+                    message: "Không thể hoàn hàng vì thiếu thời điểm giao hàng"
+                });
+            }
+            const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+            const now = Date.now();
+            const deliveredAtMs = new Date(order.delivered_at).getTime();
+            if (now - deliveredAtMs < sevenDaysMs) {
+                const remainingMs = sevenDaysMs - (now - deliveredAtMs);
+                const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+                return res.status(400).json({
+                    message: `Chỉ được hoàn hàng sau 7 ngày kể từ khi giao thành công. Vui lòng thử lại sau ${remainingDays} ngày.`
+                });
+            }
         }
 
         // Kiểm tra thứ tự trạng thái (trừ khi hoàn hàng)
@@ -461,7 +553,7 @@ export const updateOrderStatus = async (req, res) => {
                         stock_id: stock._id,
                         quantity_change: -item.quantity,
                         updated_by: req.user._id,
-                        reason: `Order #${order._id} shipped`,
+                        reason: `Order #${order.order_code} shipped`,
                         note: `Đơn hàng chuyển sang trạng thái đang giao hàng`
                     });
 
@@ -486,7 +578,7 @@ export const updateOrderStatus = async (req, res) => {
                         stock_id: stock._id,
                         quantity_change: item.quantity,
                         updated_by: req.user._id,
-                        reason: `Order #${order._id} returned`,
+                        reason: `Order #${order.order_code} returned`,
                         note: `Đơn hàng hoàn trả`
                     });
 
@@ -500,6 +592,9 @@ export const updateOrderStatus = async (req, res) => {
 
         // Cập nhật trạng thái
         order.status = status;
+        if (status === 'delivered') {
+            order.delivered_at = new Date();
+        }
         await order.save();
 
         // Map trạng thái ra text
@@ -519,7 +614,7 @@ export const updateOrderStatus = async (req, res) => {
         await Notification.create({
             user_id: order.user_id.toString(),
             title: 'Cập nhật trạng thái đơn hàng',
-            message: `Đơn hàng #${order._id} của bạn đã chuyển sang trạng thái: ${getStatusText(status)}`,
+            message: `Đơn hàng #${order.order_code} của bạn đã chuyển sang trạng thái: ${getStatusText(status)}`,
             type: 'order_status',
             data: {
                 order_id: order._id,
@@ -535,7 +630,7 @@ export const updateOrderStatus = async (req, res) => {
             await Notification.create({
                 user_id: admin._id,
                 title: 'Cập nhật trạng thái đơn hàng',
-                message: `Đơn hàng #${order._id} đã chuyển sang trạng thái: ${getStatusText(status)}`,
+                message: `Đơn hàng #${order.order_code} đã chuyển sang trạng thái: ${getStatusText(status)}`,
                 type: 'order_status',
                 data: {
                     order_id: order._id,
@@ -632,8 +727,8 @@ export const cancelOrder = async (req, res) => {
             user_id: order.user_id.toString(), // Đảm bảo convert sang string
             title: 'Đơn hàng đã bị hủy',
             message: isAdmin
-                ? `Đơn hàng của bạn đã bị hủy bởi Admin với lý do: ${req.body.cancel_reason || 'Không có lý do'}`
-                : `Đơn hàng của bạn đã bị hủy thành công`,
+                ? `Đơn hàng #${order.order_code} của bạn đã bị hủy bởi Admin với lý do: ${req.body.cancel_reason || 'Không có lý do'}`
+                : `Đơn hàng #${order.order_code} của bạn đã bị hủy thành công`,
             type: 'order_status',
             data: {
                 order_id: orderId,
@@ -654,7 +749,7 @@ export const cancelOrder = async (req, res) => {
                 await Notification.create({
                     user_id: adminUser._id,
                     title: 'Đơn hàng bị hủy',
-                    message: `Khách hàng đã hủy đơn hàng #${orderId}. Lý do: ${req.body.cancel_reason || 'Không có lý do'}`,
+                    message: `Khách hàng đã hủy đơn hàng #${order.order_code}. Lý do: ${req.body.cancel_reason || 'Không có lý do'}`,
                     type: 'order_status',
                     data: {
                         order_id: orderId,
@@ -879,6 +974,28 @@ export const buyNowOrder = async (req, res) => {
         } else {
             if (!shipping_address || !full_name || !phone)
                 return res.status(400).json({ message: "Thiếu thông tin địa chỉ giao hàng" });
+
+            // Cập nhật thông tin cơ bản của user nếu chưa có
+            if (!user.full_name) user.full_name = full_name;
+            if (!user.phone) user.phone = phone;
+
+            // Tạo địa chỉ giao hàng mới và lưu vào user
+            const newShippingAddress = {
+                full_name,
+                phone,
+                address: shipping_address,
+                is_default: false // Không đặt làm mặc định cho buy now
+            };
+
+            // Thêm địa chỉ mới vào danh sách địa chỉ của user
+            if (!user.shipping_addresses) {
+                user.shipping_addresses = [];
+            }
+            user.shipping_addresses.push(newShippingAddress);
+
+            // Lưu thông tin user
+            await user.save();
+
             fullShippingAddress = `${full_name} - ${phone} - ${shipping_address}`;
         }
 
@@ -967,7 +1084,7 @@ export const buyNowOrder = async (req, res) => {
             await Notification.create({
                 user_id: adminUser._id,
                 title: 'Đơn hàng mới',
-                message: `Có đơn hàng mới từ khách hàng ${user.username || user.email}`,
+                message: `Có đơn hàng mới (#${order.order_code}) từ khách hàng ${user.username || user.email}`,
                 type: 'new_order',
                 data: {
                     order_id: order._id,
@@ -1030,7 +1147,7 @@ export const returnOrderByCustomer = async (req, res) => {
                     stock_id: stock._id,
                     quantity_change: item.quantity,
                     updated_by: req.user._id,
-                    reason: `Order #${order._id} returned by customer`,
+                    reason: `Order #${order.order_code} returned by customer`,
                     note: `Khách hàng hoàn đơn`
                 });
 
@@ -1054,7 +1171,7 @@ export const returnOrderByCustomer = async (req, res) => {
             await Notification.create({
                 user_id: admin._id,
                 title: 'Khách hàng hoàn hàng',
-                message: `Khách hàng đã hoàn đơn hàng #${order._id}`,
+                message: `Khách hàng đã hoàn đơn hàng #${order.order_code}`,
                 type: 'order_returned',
                 data: {
                     order_id: order._id,
@@ -1068,7 +1185,7 @@ export const returnOrderByCustomer = async (req, res) => {
         await Notification.create({
             user_id: req.user._id,
             title: 'Xác nhận hoàn hàng',
-            message: `Chúng tôi đã tiếp nhận yêu cầu hoàn hàng cho đơn #${order._id}`,
+            message: `Chúng tôi đã tiếp nhận yêu cầu hoàn hàng cho đơn #${order.order_code}`,
             type: 'order_returned',
             data: {
                 order_id: order._id,

@@ -44,7 +44,7 @@ const stockSchema = Joi.object({
         })
 });
 
-const stockUpdateSchema = Joi.object({
+const stockUpdateQuantitySchema = Joi.object({
     quantity_change: Joi.number()
         .required()
         .messages({
@@ -56,8 +56,35 @@ const stockUpdateSchema = Joi.object({
         .messages({
             'string.empty': 'Lý do không được để trống',
             'any.required': 'Lý do là bắt buộc'
+        }),
+    status: Joi.string()
+        .valid('inStock', 'outOfStock', 'paused')
+        .optional()
+        .messages({
+            'any.only': 'Trạng thái phải là inStock, outOfStock hoặc paused'
         })
 });
+
+const stockUpdateStatusOnlySchema = Joi.object({
+    status: Joi.string()
+        .valid('inStock', 'outOfStock', 'paused')
+        .required()
+        .messages({
+            'any.only': 'Trạng thái phải là inStock, outOfStock hoặc paused',
+            'any.required': 'Trạng thái là bắt buộc khi không thay đổi số lượng'
+        }),
+    reason: Joi.string()
+        .required()
+        .messages({
+            'string.empty': 'Lý do không được để trống',
+            'any.required': 'Lý do là bắt buộc'
+        })
+});
+
+const stockUpdateSchema = Joi.alternatives().try(
+    stockUpdateQuantitySchema,
+    stockUpdateStatusOnlySchema
+);
 
 export const validateStock = (req, res, next) => {
     const { error } = stockSchema.validate(req.body, { abortEarly: false });

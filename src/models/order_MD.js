@@ -60,6 +60,10 @@ const orderSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    // Địa chỉ giao hàng dạng chuỗi: "Họ tên - SĐT - Địa chỉ"
+    shipping_address: {
+        type: String
+    },
     payment_status: {
         type: String,
         enum: {
@@ -67,6 +71,11 @@ const orderSchema = new mongoose.Schema({
             message: 'Trạng thái thanh toán {VALUE} không hợp lệ'
         },
         default: 'unpaid'
+    },
+    // Thời điểm giao hàng thành công
+    delivered_at: {
+        type: Date,
+        default: null
     },
     app_trans_id: { type: String, required: true },
     cancel_reason: {
@@ -120,6 +129,13 @@ orderSchema.virtual('trangThai').get(function () {
         'returned': 'Đã hoàn hàng'
     };
     return statusMap[this.status] || this.status;
+});
+
+/**
+ * Virtual field mã đơn hàng (10 ký tự đầu của _id)
+ */
+orderSchema.virtual('order_code').get(function () {
+    return this._id ? this._id.toString().slice(0, 10) : '';
 });
 
 
