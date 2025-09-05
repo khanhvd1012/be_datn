@@ -12,6 +12,7 @@ import moment from 'moment';
 import crypto from 'crypto';
 import axios from "axios";
 import { sendEmailOrder } from "../middleware/sendEmail";
+import mongoose from "mongoose";
 
 // tạo đơn hàng
 export const getAllOrderAdmin = async (req, res) => {
@@ -55,7 +56,7 @@ export const createOrder = async (req, res) => {
             cart_id,
             voucher_code,
             shipping_address_id, // ID của địa chỉ có sẵn trong profile
-            shipping_address, // Địa chỉ mới (nếu không dùng địa chỉ có sẵn)
+            shipping_address, // Có thể là địa chỉ mới hoặc nhầm gửi ID
             full_name,
             phone,
             payment_method
@@ -83,36 +84,45 @@ export const createOrder = async (req, res) => {
         }
         // Nếu không có shipping_address_id, yêu cầu thông tin địa chỉ mới
         else {
-            if (!shipping_address || !full_name || !phone) {
-                return res.status(400).json({ message: "Vui lòng cung cấp đầy đủ thông tin giao hàng" });
+            // Nếu client gửi nhầm ObjectId trong trường shipping_address → coi như chọn địa chỉ sẵn có
+            if (shipping_address && mongoose.isValidObjectId(shipping_address)) {
+                const existingAddress = user.shipping_addresses.id(shipping_address);
+                if (!existingAddress) {
+                    return res.status(404).json({ message: "Không tìm thấy địa chỉ giao hàng đã chọn" });
+                }
+                fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}`;
+            } else {
+                if (!shipping_address || !full_name || !phone) {
+                    return res.status(400).json({ message: "Vui lòng cung cấp đầy đủ thông tin giao hàng" });
+                }
+
+                // Kiểm tra xem đây có phải là đơn hàng đầu tiên của user không
+                const orderCount = await Order_MD.countDocuments({ user_id });
+                const isFirstOrder = orderCount === 0;
+
+                // Cập nhật thông tin cơ bản của user nếu chưa có
+                if (!user.full_name) user.full_name = full_name;
+                if (!user.phone) user.phone = phone;
+
+                // Tạo địa chỉ giao hàng mới
+                const newShippingAddress = {
+                    full_name,
+                    phone,
+                    address: shipping_address,
+                    is_default: isFirstOrder // Đặt là địa chỉ mặc định nếu là đơn hàng đầu tiên
+                };
+
+                // Thêm địa chỉ mới vào danh sách địa chỉ của user
+                if (!user.shipping_addresses) {
+                    user.shipping_addresses = [];
+                }
+                user.shipping_addresses.push(newShippingAddress);
+
+                // Lưu thông tin user
+                await user.save();
+
+                fullShippingAddress = `${full_name} - ${phone} - ${shipping_address}`;
             }
-
-            // Kiểm tra xem đây có phải là đơn hàng đầu tiên của user không
-            const orderCount = await Order_MD.countDocuments({ user_id });
-            const isFirstOrder = orderCount === 0;
-
-            // Cập nhật thông tin cơ bản của user nếu chưa có
-            if (!user.full_name) user.full_name = full_name;
-            if (!user.phone) user.phone = phone;
-
-            // Tạo địa chỉ giao hàng mới
-            const newShippingAddress = {
-                full_name,
-                phone,
-                address: shipping_address,
-                is_default: isFirstOrder // Đặt là địa chỉ mặc định nếu là đơn hàng đầu tiên
-            };
-
-            // Thêm địa chỉ mới vào danh sách địa chỉ của user
-            if (!user.shipping_addresses) {
-                user.shipping_addresses = [];
-            }
-            user.shipping_addresses.push(newShippingAddress);
-
-            // Lưu thông tin user
-            await user.save();
-
-            fullShippingAddress = `${full_name} - ${phone} - ${shipping_address}`;
         }
 
         // kiểm tra giỏ hàng tồn tại và thuộc về user
@@ -969,31 +979,37 @@ export const buyNowOrder = async (req, res) => {
             if (!existingAddress) return res.status(404).json({ message: "Địa chỉ giao hàng không hợp lệ" });
             fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}`;
         } else {
-            if (!shipping_address || !full_name || !phone)
-                return res.status(400).json({ message: "Thiếu thông tin địa chỉ giao hàng" });
+            if (shipping_address && mongoose.isValidObjectId(shipping_address)) {
+                const existingAddress = user.shipping_addresses.id(shipping_address);
+                if (!existingAddress) return res.status(404).json({ message: "Địa chỉ giao hàng không hợp lệ" });
+                fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}`;
+            } else {
+                if (!shipping_address || !full_name || !phone)
+                    return res.status(400).json({ message: "Thiếu thông tin địa chỉ giao hàng" });
 
-            // Cập nhật thông tin cơ bản của user nếu chưa có
-            if (!user.full_name) user.full_name = full_name;
-            if (!user.phone) user.phone = phone;
+                // Cập nhật thông tin cơ bản của user nếu chưa có
+                if (!user.full_name) user.full_name = full_name;
+                if (!user.phone) user.phone = phone;
 
-            // Tạo địa chỉ giao hàng mới và lưu vào user
-            const newShippingAddress = {
-                full_name,
-                phone,
-                address: shipping_address,
-                is_default: false // Không đặt làm mặc định cho buy now
-            };
+                // Tạo địa chỉ giao hàng mới và lưu vào user
+                const newShippingAddress = {
+                    full_name,
+                    phone,
+                    address: shipping_address,
+                    is_default: false // Không đặt làm mặc định cho buy now
+                };
 
-            // Thêm địa chỉ mới vào danh sách địa chỉ của user
-            if (!user.shipping_addresses) {
-                user.shipping_addresses = [];
+                // Thêm địa chỉ mới vào danh sách địa chỉ của user
+                if (!user.shipping_addresses) {
+                    user.shipping_addresses = [];
+                }
+                user.shipping_addresses.push(newShippingAddress);
+
+                // Lưu thông tin user
+                await user.save();
+
+                fullShippingAddress = `${full_name} - ${phone} - ${shipping_address}`;
             }
-            user.shipping_addresses.push(newShippingAddress);
-
-            // Lưu thông tin user
-            await user.save();
-
-            fullShippingAddress = `${full_name} - ${phone} - ${shipping_address}`;
         }
 
         // Tính giá
