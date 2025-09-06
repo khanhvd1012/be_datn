@@ -70,6 +70,23 @@ const variantSchema = new mongoose.Schema({
         type: String,
         enum: ['inStock', 'outOfStock', 'paused'],
         default: 'inStock'
+    },
+    weight: {
+        type: Number,
+        required: true,
+        default: 0
+    },
+    length: {
+        type: Number,
+        default: 0
+    },
+    width: {
+        type: Number,
+        default: 0
+    },
+    height: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
 
