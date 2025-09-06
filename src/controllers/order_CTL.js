@@ -897,11 +897,9 @@ export const zaloPayCallback = async (req, res) => {
                 await Cart_MD.findByIdAndUpdate(order.cart_id, { cart_items: [] });
             }
         }
-        console.log("👉 Type callback:", type);
-
         return res.json({ return_code: 1, return_message: "success" });
     } catch (error) {
-        console.error("🔥 ZaloPay callback error:", error);
+        console.error("🔥ZaloPay callback error:", error);
         return res.json({ return_code: -1, return_message: "Lỗi server" });
     }
 };

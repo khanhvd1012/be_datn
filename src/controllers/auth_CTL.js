@@ -305,7 +305,7 @@ export const getProfile = async (req, res) => {
 
 export const getAllUsers = async (req, res) => {
     try {
-        const users = await user_MD.find().select("-password").sort({ createdAt: -1 });
+        const users = await user_MD.find().select("-password").sort({ createdAt: -1 }).populate("blockedBy", "username email role");
 
         if (!users || users.length === 0) {
             return res.status(404).json({ message: "Không tìm thấy người dùng nào" });
@@ -336,6 +336,7 @@ export const toggleBlockUser = async (req, res) => {
             }
             user.isBlocked = true;
             user.blockReason = reason;
+            user.blockedBy = req.user._id;
 
             // gửi email khi khoá
             await sendEmailBlock(
@@ -350,6 +351,7 @@ export const toggleBlockUser = async (req, res) => {
         } else {
             user.isBlocked = false;
             user.blockReason = "";
+            user.blockedBy = null;
 
             // gửi email khi mở khoá
             await sendEmailBlock(

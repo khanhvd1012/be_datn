@@ -17,6 +17,11 @@ const userSchema = new mongoose.Schema(
         shipping_addresses: [shippingAddressSchema],
         isBlocked: { type: Boolean, default: false }, 
         blockReason: { type: String, default: "" }, 
+        blockedBy: { 
+            type: mongoose.Schema.Types.ObjectId, 
+            ref: "User",  
+            default: null 
+        },
         role: { type: String, enum: ["user", "employee", "admin"], default: "user" },
         auto_restore_cart: {
             type: Boolean,
