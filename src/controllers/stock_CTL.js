@@ -26,7 +26,7 @@ export const getAllStock = async (req, res) => {
                         select: 'size'
                     }
                 ],
-                select: 'product_id sku color size'
+                select: 'product_id sku color size status'
             })
             .sort({ createdAt: -1 });
 
@@ -75,6 +75,7 @@ export const getAllStock = async (req, res) => {
                 color: variant?.color?.name || 'N/A',
                 size: variant?.size?.size || 'N/A',
                 product_name: variant?.product_id?.name || 'N/A',
+                status: variant?.status || 'N/A',
                 product_variant_id: item.product_variant_id,
                 last_updated: item.last_updated,
                 createdAt: item.createdAt
