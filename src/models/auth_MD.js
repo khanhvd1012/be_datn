@@ -4,6 +4,12 @@ const shippingAddressSchema = new mongoose.Schema({
     full_name: { type: String, required: true },
     phone: { type: String, required: true },
     address: { type: String, required: true },
+    province_id: { type: Number, required: false },
+    province_name: { type: String, required: false },
+    district_id: { type: Number, required: false },
+    district_name: { type: String, required: false },
+    ward_code: { type: String, required: false },
+    ward_name: { type: String, required: false },
     is_default: { type: Boolean, default: false }
 }, { _id: true, timestamps: true });
 
@@ -38,7 +44,6 @@ userSchema.pre('save', async function (next) {
     if (this.isModified('shipping_addresses')) {
         const defaultAddresses = this.shipping_addresses.filter(addr => addr.is_default);
         if (defaultAddresses.length > 1) {
-            // Nếu có nhiều hơn 1 địa chỉ mặc định, chỉ giữ địa chỉ mặc định cuối cùng
             for (let i = 0; i < defaultAddresses.length - 1; i++) {
                 const addr = this.shipping_addresses.id(defaultAddresses[i]._id);
                 if (addr) addr.is_default = false;

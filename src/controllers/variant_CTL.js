@@ -81,6 +81,7 @@ export const createVariant = async (req, res) => {
             size: req.body.size,
             price: req.body.price,
             gender: req.body.gender,
+            weight: req.body.weight,
             image_url: imageUrls,
             import_price: req.body.import_price,
             status: 'inStock',
@@ -271,7 +272,8 @@ export const getAllVariants = async (req, res) => {
                     ...variant.toObject(),
                     stock: {
                         quantity: stock ? stock.quantity : 0,
-                        status: variant.status
+                        status: variant.status,
+                        weight: variant.weight // Add weight to response
                     }
                 };
             })
@@ -473,6 +475,7 @@ export const getTopSellingVariants = async (req, res, next) => {
                         code: "$color.code",
                         description: "$color.description",
                     }, 
+                    weight: "$variant.weight", // Add weight to projection
                     totalSold: 1,
                 },
             },
@@ -539,7 +542,8 @@ export const getTopRatedVariants = async (req, res, next) => {
                     color: "$color",
                     size: "$size",
                     averageRating: 1,
-                    reviewCount: 1
+                    reviewCount: 1,
+                    weight: "$variant.weight", // Add weight to projection
                 }
             },
             { $sort: { averageRating: -1 } }

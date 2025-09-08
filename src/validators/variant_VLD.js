@@ -49,6 +49,14 @@ const variantSchema = Joi.object({
     status: Joi.string().valid('inStock', 'outOfStock').default('inStock').messages({
         'any.only': 'Trạng thái phải là inStock hoặc outOfStock'
     }),
+    weight: Joi.number()
+        .min(0)
+        .required()
+        .messages({
+            'number.base': 'Cân nặng phải là số',
+            'number.min': 'Cân nặng không được âm',
+            'number.empty': 'Cân nặng không được để trống'
+        }),
 });
 
 const cartItemSchema = Joi.object({
