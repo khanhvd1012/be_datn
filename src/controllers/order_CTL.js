@@ -263,7 +263,7 @@ export const createOrder = async (req, res) => {
                     message: "Đang chuyển hướng đến ZaloPay",
                     donHang: {
                         ...order.toObject(),
-                        chiTietDonHang: [orderItem],
+                        chiTietDonHang: orderItems,
                         tongGoc: sub_total,
                         giamGia: voucher_discount,
                         phiShip: shippingFee,
@@ -417,7 +417,6 @@ export const getOrderByIdAdmin = async (req, res) => {
     }
 };
 
-
 export const getOrderById = async (req, res) => {
     try {
         const order = await Order_MD.findOne({ _id: req.params.id })
@@ -455,7 +454,9 @@ export const getOrderById = async (req, res) => {
             if (user && user.shipping_addresses.length > 0) {
                 // Tìm địa chỉ matching với order.shipping_address (theo address text)
                 const matchAddr = user.shipping_addresses.find(addr =>
-                    order.shipping_address.includes(addr.address)
+                    order.shipping_address && typeof order.shipping_address === "string"
+                        ? order.shipping_address.includes(addr.address)
+                        : false
                 );
                 if (matchAddr) {
                     full_address_info = {
@@ -818,7 +819,7 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
         embed_data: JSON.stringify(embed_data),
         description: `Thanh toán đơn hàng #${orderId}`,
         bank_code: "",
-        callback_url: "https://3dfcbc70c821.ngrok-free.app/payment/zalopay/callback",
+        callback_url: "https://e57cec3bb8b7.ngrok-free.app/payment/zalopay/callback",
     };
 
     const data = `${config.app_id}|${order.app_trans_id}|${order.app_user}|${order.amount}|${order.app_time}|${order.embed_data}|${order.item}`;
@@ -827,18 +828,12 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
     try {
         const response = await axios.post(config.endpoint, null, { params: order });
 
-        await Order_MD.findOneAndUpdate(
-            { app_trans_id },
-            {
-                user_id: userId,
-                order_id: orderId,
-                app_trans_id,
-                amount,
-                status: "pending",
-                payment_status: "unpaid",
-            },
-            { upsert: true, new: true }
-        );
+        await Order_MD.findByIdAndUpdate(orderId, {
+            app_trans_id,
+            amount,
+            status: "pending",
+            payment_status: "unpaid",
+        });
 
         setTimeout(async () => {
             const orderCheck = await Order_MD.findOne({ app_trans_id });
@@ -871,14 +866,12 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
 
 export const zaloPayCallback = async (req, res) => {
     try {
-        console.log("🔥 Nhận callback từ ZaloPay:", req.body);
         const { data, mac, type } = req.body;
 
         const hash = crypto.createHmac("sha256", config.key2).update(data).digest("hex");
         if (mac !== hash) {
             return res.json({ return_code: -1, return_message: "Invalid MAC" });
         }
-        console.error("MAC:", { mac, hash });
 
         const callbackData = JSON.parse(data);
         const { app_trans_id, zp_trans_id } = callbackData;
@@ -899,7 +892,6 @@ export const zaloPayCallback = async (req, res) => {
                 order.transaction_id = zp_trans_id;
                 await order.save();
 
-                const user = await User_MD.findById(order.user_id);
                 const orderItems = await OrderItem_MD.find({ order_id: order._id })
                     .populate("product_id")
                     .populate({
@@ -910,11 +902,18 @@ export const zaloPayCallback = async (req, res) => {
                         ],
                     });
 
-                await sendEmailOrder(user.email, order, orderItems);
+                await sendEmailOrder(order.user_id.email, order, orderItems);
 
                 // Xóa giỏ hàng
                 await CartItem_MD.deleteMany({ cart_id: order.cart_id });
                 await Cart_MD.findByIdAndUpdate(order.cart_id, { cart_items: [] });
+
+                for (const item of orderItems) {
+                    await Stock_MD.findOneAndUpdate(
+                        { product_variant_id: item.variant_id._id },
+                        { $inc: { quantity: -item.quantity } }
+                    );
+                }
             }
         }
         return res.json({ return_code: 1, return_message: "success" });
@@ -1027,10 +1026,10 @@ export const buyNowOrder = async (req, res) => {
                 district_id,
                 district_name: districtName,
                 ward_code,
-                ward_name: wardName, 
+                ward_name: wardName,
                 is_default: false
-              };
-              
+            };
+
 
             user.shipping_addresses.push(newShippingAddress);
             await user.save();
