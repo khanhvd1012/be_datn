@@ -84,24 +84,29 @@ export const createOrder = async (req, res) => {
         let fullShippingAddress = "";
         let provinceName = "", districtName = "", wardName = "";
 
+        // ✅ Thêm biến riêng để tính phí ship
+        let finalProvinceId, finalDistrictId, finalWardCode;
+
         if (shipping_address_id) {
-            // Lấy địa chỉ cũ
             const existingAddress = user.shipping_addresses.id(shipping_address_id);
             if (!existingAddress) {
                 return res.status(404).json({ message: "Không tìm thấy địa chỉ giao hàng đã chọn" });
             }
+
             fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}`;
             provinceName = existingAddress.province_name;
             districtName = existingAddress.district_name;
             wardName = existingAddress.ward_name;
+
+            finalProvinceId = existingAddress.province_id;
+            finalDistrictId = existingAddress.district_id;
+            finalWardCode = existingAddress.ward_code;
         } else {
-            // Tạo địa chỉ mới
+            // Trường hợp tạo địa chỉ mới
             if (!shipping_address || !full_name || !phone || !province_id || !district_id || !ward_code) {
                 return res.status(400).json({ message: "Vui lòng cung cấp đầy đủ thông tin địa chỉ (bao gồm province_id, district_id, ward_code)" });
             }
 
-
-            // Lấy tên từ GHN
             const provinces = await getProvinces();
             const districts = await getDistricts(province_id);
             const wards = await getWards(district_id);
@@ -114,7 +119,6 @@ export const createOrder = async (req, res) => {
                 return res.status(400).json({ message: "Không tìm thấy thông tin địa chỉ từ GHN" });
             }
 
-            // Kiểm tra đây có phải đơn hàng đầu tiên không
             const orderCount = await Order_MD.countDocuments({ user_id });
             const isFirstOrder = orderCount === 0;
 
@@ -135,6 +139,10 @@ export const createOrder = async (req, res) => {
             await user.save();
 
             fullShippingAddress = `${full_name} - ${phone} - ${shipping_address}, ${wardName}, ${districtName}, ${provinceName}`;
+
+            finalProvinceId = province_id;
+            finalDistrictId = district_id;
+            finalWardCode = ward_code;
         }
 
         // --- Kiểm tra giỏ hàng ---
@@ -201,14 +209,15 @@ export const createOrder = async (req, res) => {
             voucher.usedCount += 1;
             await voucher.save();
         }
+
         // --- GHN Shipping Fee ---
         let totalWeight = 0;
         for (const item of cart.cart_items) {
             totalWeight += (item.variant_id?.weight || 200) * item.quantity;
         }
 
-        const districtIdForFee = toDistrictId || district_id;
-        const wardCodeForFee = toWardCode || ward_code;
+        const districtIdForFee = toDistrictId || finalDistrictId;
+        const wardCodeForFee = toWardCode || finalWardCode;
 
         let shippingFee = 0, shippingService = null;
         try {
@@ -223,7 +232,6 @@ export const createOrder = async (req, res) => {
             console.error("GHN fee error:", err.message);
             return res.status(500).json({ message: "Không tính được phí vận chuyển", error: err.message });
         }
-
 
         const total_price = sub_total - voucher_discount + shippingFee;
         const app_trans_id = `${moment().format("YYMMDD")}_${Math.floor(Math.random() * 1000000)}`;
@@ -308,6 +316,7 @@ export const createOrder = async (req, res) => {
         return res.status(500).json({ message: "Đã xảy ra lỗi khi tạo đơn hàng", error: error.message });
     }
 };
+
 
 // lấy tất cả đơn hàng
 export const getAllOrderUser = async (req, res) => {
@@ -530,7 +539,34 @@ export const updateOrderStatus = async (req, res) => {
             });
         }
 
-        // Chỉ cho hoàn hàng khi đã giao và sau 7 ngày kể từ khi giao thành công
+        // Chỉ cho hoàn hàng khi đã giao và trong vòng 7 ngày kể từ khi giao thành công
+        // if (status === 'returned') {
+        //     if (order.status !== 'delivered') {
+        //         return res.status(400).json({
+        //             message: "Chỉ có thể hoàn hàng khi đơn hàng đã được giao"
+        //         });
+        //     }
+
+        //     // Kiểm tra thời gian giao hàng
+        //     if (!order.delivered_at) {
+        //         return res.status(400).json({
+        //             message: "Không thể hoàn hàng vì thiếu thời điểm giao hàng"
+        //         });
+        //     }
+
+        //     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+        //     const now = Date.now();
+        //     const deliveredAtMs = new Date(order.delivered_at).getTime();
+
+        //     // Chỉ cho phép hoàn trong vòng 7 ngày kể từ lúc nhận
+        //     if (now > deliveredAtMs + sevenDaysMs) {
+        //         return res.status(400).json({
+        //             message: "Chỉ được hoàn hàng trong vòng 7 ngày kể từ khi nhận hàng"
+        //         });
+        //     }
+        // }
+
+        // Chỉ cho hoàn hàng khi đã giao và trong vòng 1 phút kể từ khi giao thành công (dùng để test)
         if (status === 'returned') {
             if (order.status !== 'delivered') {
                 return res.status(400).json({
@@ -538,23 +574,24 @@ export const updateOrderStatus = async (req, res) => {
                 });
             }
 
-            // Kiểm tra thời gian 7 ngày kể từ delivered_at
             if (!order.delivered_at) {
                 return res.status(400).json({
                     message: "Không thể hoàn hàng vì thiếu thời điểm giao hàng"
                 });
             }
-            const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+            const oneMinuteMs = 1 * 60 * 1000; // 1 phút
             const now = Date.now();
             const deliveredAtMs = new Date(order.delivered_at).getTime();
-            if (now - deliveredAtMs < sevenDaysMs) {
-                const remainingMs = sevenDaysMs - (now - deliveredAtMs);
-                const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+
+            if (now > deliveredAtMs + oneMinuteMs) {
                 return res.status(400).json({
-                    message: `Chỉ được hoàn hàng sau 7 ngày kể từ khi giao thành công. Vui lòng thử lại sau ${remainingDays} ngày.`
+                    message: "Chỉ được hoàn hàng trong vòng 1 phút kể từ khi nhận (test mode)"
                 });
             }
         }
+
+
 
         // Kiểm tra thứ tự trạng thái (trừ khi hoàn hàng)
         if (status !== 'returned' && statusOrder[status] <= statusOrder[order.status]) {
@@ -983,21 +1020,26 @@ export const buyNowOrder = async (req, res) => {
 
         let fullShippingAddress = "";
         let provinceName = "", districtName = "", wardName = "";
+        let finalProvinceId, finalDistrictId, finalWardCode;
 
         if (shipping_address_id) {
             const existingAddress = user.shipping_addresses.id(shipping_address_id);
-            if (!existingAddress) return res.status(404).json({ message: "Địa chỉ giao hàng không hợp lệ" });
-
+            if (!existingAddress) {
+                return res.status(404).json({ message: "Không tìm thấy địa chỉ giao hàng đã chọn" });
+            }
             fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}`;
             provinceName = existingAddress.province_name;
             districtName = existingAddress.district_name;
             wardName = existingAddress.ward_name;
+
+            finalProvinceId = existingAddress.province_id;
+            finalDistrictId = existingAddress.district_id;
+            finalWardCode = existingAddress.ward_code;
         } else {
             if (!shipping_address || !full_name || !phone || !province_id || !district_id || !ward_code) {
                 return res.status(400).json({ message: "Vui lòng cung cấp đầy đủ thông tin địa chỉ (bao gồm province_id, district_id, ward_code)" });
             }
 
-            // Lấy tên tỉnh/huyện/xã từ GHN
             const provinces = await getProvinces();
             const districts = await getDistricts(province_id);
             const wards = await getWards(district_id);
@@ -1023,11 +1065,14 @@ export const buyNowOrder = async (req, res) => {
                 is_default: false
             };
 
-
             user.shipping_addresses.push(newShippingAddress);
             await user.save();
 
             fullShippingAddress = `${full_name} - ${phone} - ${shipping_address}, ${wardName}, ${districtName}, ${provinceName}`;
+
+            finalProvinceId = province_id;
+            finalDistrictId = district_id;
+            finalWardCode = ward_code;
         }
 
         // --- Tính giá ---
@@ -1065,8 +1110,8 @@ export const buyNowOrder = async (req, res) => {
         try {
             const totalWeight = (variant.weight || 200) * quantity;
 
-            const districtIdForFee = toDistrictId || district_id;
-            const wardCodeForFee = toWardCode || ward_code;
+            const districtIdForFee = toDistrictId || finalDistrictId;
+            const wardCodeForFee = toWardCode || finalWardCode;
 
             const { service, fee } = await getAutoShippingFee({
                 toDistrictId: districtIdForFee,
