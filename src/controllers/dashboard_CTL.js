@@ -141,30 +141,23 @@ export const getDashboardStats = async (req, res) => {
         const firstDay = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
         const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-        const monthlyRevenueAgg = await OrderItem.aggregate([
-            {
-                $lookup: {
-                    from: "orders",
-                    localField: "order_id",
-                    foreignField: "_id",
-                    as: "order"
-                }
-            },
-            { $unwind: "$order" },
+        const monthlyRevenueAgg = await Order.aggregate([
             {
                 $match: {
-                    "order.status": "delivered",
-                    "order.createdAt": { $gte: firstDay, $lte: lastDay }
+                    status: "delivered",
+                    delivered_at: { $gte: firstDay, $lte: lastDay } // nên dựa theo ngày giao hàng
                 }
             },
             {
                 $group: {
                     _id: null,
-                    revenue: { $sum: { $multiply: ["$quantity", "$price"] } }
+                    revenue: { $sum: "$total_price" } // tổng tiền của các đơn đã giao
                 }
             }
         ]);
+
         const monthlyRevenue = monthlyRevenueAgg[0]?.revenue || 0;
+
 
         res.json({
             success: true,

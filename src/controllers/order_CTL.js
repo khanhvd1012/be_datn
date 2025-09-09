@@ -907,13 +907,6 @@ export const zaloPayCallback = async (req, res) => {
                 // Xóa giỏ hàng
                 await CartItem_MD.deleteMany({ cart_id: order.cart_id });
                 await Cart_MD.findByIdAndUpdate(order.cart_id, { cart_items: [] });
-
-                for (const item of orderItems) {
-                    await Stock_MD.findOneAndUpdate(
-                        { product_variant_id: item.variant_id._id },
-                        { $inc: { quantity: -item.quantity } }
-                    );
-                }
             }
         }
         return res.json({ return_code: 1, return_message: "success" });
