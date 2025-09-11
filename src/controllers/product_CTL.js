@@ -392,43 +392,64 @@ export const getProductVariants = async (req, res, next) => {
 export const getProductBySlug = async (req, res) => {
     try {
         const product = await Product.findOne({ slug: req.params.slug })
-            .populate('brand')
-            .populate('category')
-            .populate('variants');
+            .populate("brand")
+            .populate("category")
+            .populate("variants");
 
         if (!product) {
-            return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+            return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
         }
 
-        // Lấy thêm thông tin stock cho từng variant
+        // Lấy tất cả order đã giao thành công, populate sang OrderItem
+        const orders = await Order.find({
+            status: "delivered",
+        }).populate({
+            path: "items",
+            match: { variant_id: { $in: product.variants.map((v) => v._id) } },
+            select: "variant_id quantity", // chỉ lấy field cần dùng
+        });
+
+        // Gom số lượng đã bán theo variant_id
+        const soldMap = {};
+        orders.forEach((order) => {
+            order.items.forEach((item) => {
+                const variantId = item.variant_id.toString();
+                if (!soldMap[variantId]) soldMap[variantId] = 0;
+                soldMap[variantId] += item.quantity;
+            });
+        });
+
+        // Thêm stock và soldQuantity vào từng variant
         const variantsWithStock = await Promise.all(
             product.variants.map(async (variant) => {
                 const stock = await Stock.findOne({ product_variant_id: variant._id });
+
                 return {
                     ...variant.toObject(),
                     stock: {
                         quantity: stock ? stock.quantity : 0,
-                        status: variant.status
-                    }
+                        status: variant.status,
+                    },
+                    soldQuantity: soldMap[variant._id.toString()] || 0,
                 };
             })
         );
 
         const productData = {
             ...product.toObject(),
-            variants: variantsWithStock
+            variants: variantsWithStock,
         };
 
         return res.status(200).json({
             success: true,
-            data: productData
+            data: productData,
         });
     } catch (error) {
-        console.error('Lỗi khi lấy sản phẩm theo slug:', error);
+        console.error("Lỗi khi lấy sản phẩm theo slug:", error);
         return res.status(500).json({
             success: false,
-            message: 'Lỗi máy chủ',
-            error: error.message
+            message: "Lỗi máy chủ",
+            error: error.message,
         });
     }
 };
@@ -502,76 +523,5 @@ const sendNewProductNotificationToCustomers = async (product) => {
     } catch (error) {
         console.error('Lỗi khi gửi thông báo sản phẩm mới cho khách hàng:', error);
     }
-};
-
-export const searchProducts = async (req, res) => {
-  try {
-    const { keyword } = req.query;
-    if (!keyword) {
-      return res.status(400).json({ message: "Vui lòng nhập từ khóa tìm kiếm" });
-    }
-
-    const terms = keyword.trim().split(/\s+/);
-    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regexTerms = terms.map(term => new RegExp(escapeRegex(term), "i"));
-
-    // Điều kiện: chỉ cần 1 từ khóa match bất kỳ field nào (OR thay vì AND)
-    const matchConditions = regexTerms.map(regex => ({
-      $or: [
-        { name: regex },
-        { "brand.name": regex },
-        { "category.name": regex },
-        { description: regex } // thêm cả mô tả cho phong phú
-      ]
-    }));
-
-    const products = await Product.aggregate([
-      // Join sang Brand
-      {
-        $lookup: {
-          from: "brands",
-          localField: "brand",
-          foreignField: "_id",
-          as: "brand"
-        }
-      },
-      { $unwind: { path: "$brand", preserveNullAndEmptyArrays: true } },
-
-      // Join sang Category
-      {
-        $lookup: {
-          from: "categories",
-          localField: "category",
-          foreignField: "_id",
-          as: "category"
-        }
-      },
-      { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
-
-      // Match theo OR (nới lỏng)
-      {
-        $match: { $or: matchConditions }
-      },
-
-      // Chọn field cần thiết
-      {
-        $project: {
-          _id: 1,
-          name: 1,
-          description: 1,
-          "brand._id": 1,
-          "brand.name": 1,
-          "category._id": 1,
-          "category.name": 1,
-          slug: 1,
-          variants: 1
-        }
-      }
-    ]);
-
-    res.json(products);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 };
 

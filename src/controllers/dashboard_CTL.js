@@ -145,7 +145,7 @@ export const getDashboardStats = async (req, res) => {
             {
                 $match: {
                     status: "delivered",
-                    delivered_at: { $gte: firstDay, $lte: lastDay } // nên dựa theo ngày giao hàng
+                    delivered_at: { $gte: firstDay, $lte: lastDay } 
                 }
             },
             {

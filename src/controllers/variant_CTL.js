@@ -436,6 +436,18 @@ export const getTopSellingVariants = async (req, res, next) => {
             },
             { $unwind: "$variant" },
 
+            // Lấy thông tin stock, dùng $arrayElemAt + $ifNull để tránh null
+            {
+                $lookup: {
+                    from: "stocks",
+                    let: { variantId: "$variant._id" },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$product_variant_id", "$$variantId"] } } }
+                    ],
+                    as: "stock",
+                },
+            },
+
             // Lấy thông tin product
             {
                 $lookup: {
@@ -465,6 +477,14 @@ export const getTopSellingVariants = async (req, res, next) => {
                     price: "$variant.price",
                     image_url: "$variant.image_url",
                     createdAt: "$variant.createdAt",
+                    status: "$variant.status",
+                    // Lấy stock đầu tiên hoặc mặc định nếu không có
+                    stock: {
+                        $ifNull: [
+                            { $arrayElemAt: ["$stock", 0] },
+                            { status: "outOfStock", quantity: 0 }
+                        ]
+                    },
                     averageRating: "$variant.averageRating",
                     product_id: "$product._id",
                     product_name: "$product.name",
@@ -474,8 +494,8 @@ export const getTopSellingVariants = async (req, res, next) => {
                         name: "$color.name",
                         code: "$color.code",
                         description: "$color.description",
-                    }, 
-                    weight: "$variant.weight", // Add weight to projection
+                    },
+                    weight: "$variant.weight",
                     totalSold: 1,
                 },
             },
@@ -543,7 +563,7 @@ export const getTopRatedVariants = async (req, res, next) => {
                     size: "$size",
                     averageRating: 1,
                     reviewCount: 1,
-                    weight: "$variant.weight", // Add weight to projection
+                    weight: "$variant.weight",
                 }
             },
             { $sort: { averageRating: -1 } }
