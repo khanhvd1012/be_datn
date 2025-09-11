@@ -514,42 +514,41 @@ export const setDefaultAddress = async (req, res) => {
 
 // Xóa địa chỉ giao hàng
 export const deleteAddress = async (req, res) => {
-    try {
-        const { address_id } = req.params;
-        const user = await user_MD.findById(req.user._id);
+  try {
+    const { address_id } = req.params;
+    const user = await user_MD.findById(req.user._id);
 
-        if (!user) {
-            return res.status(404).json({ message: "Không tìm thấy thông tin người dùng" });
-        }
-
-        // Tìm địa chỉ cần xóa
-        const address = user.shipping_addresses.id(address_id);
-        if (!address) {
-            return res.status(404).json({ message: "Không tìm thấy địa chỉ" });
-        }
-
-        // Không cho phép xóa địa chỉ mặc định nếu có nhiều hơn 1 địa chỉ
-        if (address.is_default && user.shipping_addresses.length > 1) {
-            return res.status(400).json({ message: "Vui lòng đặt địa chỉ mặc định khác trước khi xóa" });
-        }
-
-        // Xóa địa chỉ
-        address.remove();
-        await user.save();
-
-        return res.status(200).json({
-            message: "Xóa địa chỉ thành công",
-            addresses: user.shipping_addresses
-        });
-    } catch (error) {
-        console.error("Lỗi khi xóa địa chỉ:", error);
-        return res.status(500).json({
-            message: "Đã xảy ra lỗi khi xóa địa chỉ",
-            error: error.message
-        });
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy thông tin người dùng" });
     }
-}
 
+    // Tìm địa chỉ cần xóa
+    const address = user.shipping_addresses.id(address_id);
+    if (!address) {
+      return res.status(404).json({ message: "Không tìm thấy địa chỉ" });
+    }
+
+    // Không cho phép xóa địa chỉ mặc định nếu có nhiều hơn 1 địa chỉ
+    if (address.is_default && user.shipping_addresses.length > 1) {
+      return res.status(400).json({ message: "Vui lòng đặt địa chỉ mặc định khác trước khi xóa" });
+    }
+
+    user.shipping_addresses.pull({ _id: address_id });
+
+    await user.save();
+
+    return res.status(200).json({
+      message: "Xóa địa chỉ thành công",
+      addresses: user.shipping_addresses
+    });
+  } catch (error) {
+    console.error("Lỗi khi xóa địa chỉ:", error);
+    return res.status(500).json({
+      message: "Đã xảy ra lỗi khi xóa địa chỉ",
+      error: error.message
+    });
+  }
+};
 
 export const toggleAutoRestore = async (req, res) => {
     try {
