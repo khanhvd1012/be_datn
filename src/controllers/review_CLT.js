@@ -1,6 +1,12 @@
 import review_MD from "../models/review_MD"
 import Order from "../models/order_MD.js"
 import orderItem_MD from "../models/orderItem_MD.js";
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // lấy đánh giá sản phẩm
 export const getProductReviews = async (req, res) => {
@@ -136,7 +142,6 @@ export const getMyReviews = async (req, res) => {
     }
 };
 
-
 // lấy tất cả đánh giá
 export const getAllReviews = async (req, res) => {
     try {
@@ -197,14 +202,16 @@ export const getAllReviews = async (req, res) => {
     }
 };
 
-const deleteUploadedImages = (filesOrUrls = []) => {
-    filesOrUrls.forEach(item => {
+const deleteUploadedImages = (files = []) => {
+    files.forEach(item => {
         let filename = '';
+        if (!item) return;
         if (typeof item === 'string') {
             filename = item.split('/uploads/')[1];
-        } else if (item?.filename) {
+        } else if (item.filename) {
             filename = item.filename;
         }
+        if (!filename) return;
         const filePath = path.join(__dirname, '../../public/uploads', filename);
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
@@ -254,6 +261,7 @@ export const createReview = async (req, res) => {
         });
 
         if (existedReview) {
+            if (req.files?.length > 0) deleteUploadedImages(req.files); // <-- xóa ảnh tạm
             return res.status(400).json({
                 success: false,
                 message: "Bạn đã đánh giá cho lượt mua biến thể này rồi"
@@ -264,6 +272,12 @@ export const createReview = async (req, res) => {
         if (req.files && req.files.length > 0) {
             const baseUrl = process.env.BASE_URL || "http://localhost:3000";
             imageUrls = req.files.map(file => `${baseUrl}/uploads/${file.filename}`);
+        }
+
+        const MAX_IMAGES = 5;
+        if (imageUrls.length > MAX_IMAGES) {
+            if (req.files && req.files.length > 0) deleteUploadedImages(req.files);
+            return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
         }
 
         const review = await review_MD.create({
@@ -333,6 +347,18 @@ export const updateReview = async (req, res) => {
             const baseUrl = process.env.BASE_URL || "http://localhost:3000";
             const newImages = req.files.map(file => `${baseUrl}/uploads/${file.filename}`);
             imageUrls = [...imageUrls, ...newImages];
+        }
+
+        const MAX_IMAGES = 5;
+        if (imageUrls.length > MAX_IMAGES) {
+            // Xóa ảnh mới vừa upload để rollback
+            if (req.files && req.files.length > 0) {
+                const newImages = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+                deleteUploadedImages(newImages);
+            }
+            return res.status(400).json({
+                message: `Tổng số ảnh tối đa là ${MAX_IMAGES}`
+            });
         }
 
         req.body.images = imageUrls;

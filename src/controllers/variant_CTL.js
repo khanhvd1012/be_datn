@@ -43,6 +43,7 @@ export const createVariant = async (req, res) => {
         // Kiểm tra sản phẩm tồn tại
         const product = await product_MD.findById(req.body.product_id);
         if (!product) {
+            if (req.files?.length > 0) deleteUploadedImages(req.files);
             return res.status(404).json({ message: 'Sản phẩm không tồn tại' });
         }
         // kiểm tra trùng lặp biến thể
@@ -52,6 +53,7 @@ export const createVariant = async (req, res) => {
             size: req.body.size
         });
         if (existingVariant) {
+            if (req.files?.length > 0) deleteUploadedImages(req.files);
             return res.status(400).json({ message: 'Biến thể đã tồn tại' });
         }
         // Kiểm tra size tồn tại
@@ -69,6 +71,13 @@ export const createVariant = async (req, res) => {
         if (req.files && req.files.length > 0) {
             imageUrls = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
         }
+
+        const MAX_IMAGES = 5;
+        if (imageUrls.length > MAX_IMAGES) {
+            if (req.files && req.files.length > 0) deleteUploadedImages(req.files);
+            return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
+        }
+
         // Tạo SKU cho variant mới (phải await)
         const sku = await generateSKU(product, {
             color: req.body.color,
@@ -179,6 +188,18 @@ export const updateVariant = async (req, res) => {
         if (req.files && req.files.length > 0) {
             const newImages = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
             imageUrls = [...imageUrls, ...newImages];
+        }
+
+        const MAX_IMAGES = 5;
+        if (imageUrls.length > MAX_IMAGES) {
+            // Xóa ảnh mới vừa upload để rollback
+            if (req.files && req.files.length > 0) {
+                const newImages = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+                deleteUploadedImages(newImages);
+            }
+            return res.status(400).json({
+                message: `Tổng số ảnh tối đa là ${MAX_IMAGES}`
+            });
         }
 
         req.body.image_url = imageUrls;

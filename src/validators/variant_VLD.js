@@ -57,6 +57,27 @@ const variantSchema = Joi.object({
             'number.min': 'Cân nặng không được âm',
             'number.empty': 'Cân nặng không được để trống'
         }),
+    length: Joi.number()
+        .min(0)
+        .optional()
+        .messages({
+            'number.base': 'Chiều dài phải là số',
+            'number.min': 'Chiều dài không được âm'
+        }),
+    width: Joi.number()
+        .min(0)
+        .optional()
+        .messages({
+            'number.base': 'Chiều rộng phải là số',
+            'number.min': 'Chiều rộng không được âm'
+        }),
+    height: Joi.number()
+        .min(0)
+        .optional()
+        .messages({
+            'number.base': 'Chiều cao phải là số',
+            'number.min': 'Chiều cao không được âm'
+        })
 });
 
 const cartItemSchema = Joi.object({

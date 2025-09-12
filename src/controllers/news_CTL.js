@@ -5,16 +5,28 @@ import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import truncate from "truncate-html";
 
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Hàm xoá file upload
-const deleteImages = (imageUrls) => {
-  imageUrls.forEach((url) => {
-    const filename = url.split("/uploads/")[1];
-    const filePath = path.join(__dirname, "../../public/uploads", filename);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+const deleteUploadedImages = (files = []) => {
+  files.forEach(item => {
+    let filename = '';
+    if (!item) return;
+    if (typeof item === 'string') {
+      filename = item.split('/uploads/')[1];
+    } else if (item.filename) {
+      filename = item.filename;
+    }
+    if (!filename) return;
+    const filePath = path.join(__dirname, '../../public/uploads', filename);
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (err) {
+      console.error('Error deleting file:', filePath, err);
+    }
   });
 };
 
@@ -61,6 +73,16 @@ export const createNews = async (req, res) => {
   try {
     const images =
       req.files?.map((file) => `http://localhost:3000/uploads/${file.filename}`) || [];
+
+    const MAX_IMAGES = 5;
+
+    // Sau khi xử lý ảnh cũ + existingImages + ảnh mới
+    if (images.length > MAX_IMAGES) {
+      if (req.files && req.files.length > 0) {
+        deleteImages(images);
+      }
+      return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
+    }
 
     // Gán author từ middleware authMiddleware
     if (!req.user || !req.user._id) {
@@ -121,6 +143,18 @@ export const updateNews = async (req, res) => {
     if (req.files && req.files.length > 0) {
       const newImages = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
       imageUrls = [...imageUrls, ...newImages];
+    }
+
+    const MAX_IMAGES = 5;
+
+    // Sau khi xử lý ảnh cũ + existingImages + ảnh mới
+    if (imageUrls.length > MAX_IMAGES) {
+      // Xóa ảnh mới vừa upload
+      if (req.files && req.files.length > 0) {
+        const newImages = req.files.map(f => `http://localhost:3000/uploads/${f.filename}`);
+        deleteImages(newImages);
+      }
+      return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
     }
 
     // Bỏ existingImages ra khỏi body để tránh lưu thừa
