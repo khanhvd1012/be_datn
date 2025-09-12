@@ -1,5 +1,11 @@
 import Joi from 'joi';
 import Filter from 'leo-profanity';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Thêm từ tiếng Việt vào filter
 Filter.add(['địt', 'lồn', 'cặc', 'đụ', 'bú', 'dcm', 'dm', 'đm']);
@@ -55,18 +61,15 @@ const createReviewSchema = Joi.object({
             'string.max': 'Nội dung đánh giá không được vượt quá 1000 ký tự',
             'comment.profane': 'Nội dung chứa từ ngữ không phù hợp'
         }),
-    images: Joi.array()
-        .items(
+
+    images: Joi.array().optional(),
+
+    existingImages: Joi.alternatives()
+        .try(
+            Joi.array().items(Joi.string()),
             Joi.string()
-                .uri()
-                .messages({
-                    'string.uri': 'Định dạng URL ảnh không hợp lệ'
-                })
         )
-        .max(5)
-        .messages({
-            'array.max': 'Không được tải lên quá 5 ảnh'
-        })
+        .optional(),
 });
 
 // Schema cho update review (không bắt buộc product_id)
@@ -103,39 +106,65 @@ const updateReviewSchema = Joi.object({
             'string.max': 'Nội dung đánh giá không được vượt quá 1000 ký tự',
             'comment.profane': 'Nội dung chứa từ ngữ không phù hợp'
         }),
-    images: Joi.array()
-        .items(
+
+    images: Joi.array().optional(),
+
+    existingImages: Joi.alternatives()
+        .try(
+            Joi.array().items(Joi.string()),
             Joi.string()
-                .uri()
-                .messages({
-                    'string.uri': 'Định dạng URL ảnh không hợp lệ'
-                })
         )
-        .max(5)
-        .messages({
-            'array.max': 'Không được tải lên quá 5 ảnh'
-        })
+        .optional(),
+
 });
 
 export const validateReview = (req, res, next) => {
-    // Nếu là tạo mới (POST /reviews) thì bắt buộc product_id, nếu là update (PUT /reviews/:id) thì không
     const isUpdate = !!req.params.id;
     const schema = isUpdate ? updateReviewSchema : createReviewSchema;
 
-    const { error } = schema.validate(req.body, { abortEarly: false });
+    try {
+        // Làm sạch comment (nếu muốn clean tự động)
+        if (req.body.comment) {
+            req.body.comment = Filter.clean(req.body.comment);
+        }
 
-    if (error) {
-        const errors = error.details.map(detail => ({
-            field: detail.context.key,
-            message: detail.message
-        }));
-        return res.status(400).json({ errors });
+        // Chuẩn hóa images
+        if (req.files?.length > 0) {
+            req.body.images = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+        }
+        if (typeof req.body.images === 'string') {
+            req.body.images = [req.body.images];
+        }
+        if (typeof req.body.existingImages === 'string') {
+            req.body.existingImages = [req.body.existingImages];
+        }
+
+        // Validate cuối cùng
+        const { error } = schema.validate(req.body, { abortEarly: false });
+        if (error) {
+            if (req.files?.length > 0) {
+                req.files.forEach(file => {
+                    const filePath = path.join(__dirname, '../../public/uploads', file.filename);
+                    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+                });
+            }
+            return res.status(400).json({
+                errors: error.details.map(detail => ({
+                    field: detail.context.key,
+                    message: detail.message
+                }))
+            });
+        }
+
+        next();
+    } catch (err) {
+        if (req.files?.length > 0) {
+            req.files.forEach(file => {
+                const filePath = path.join(__dirname, '../../public/uploads', file.filename);
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            });
+        }
+        console.error('Lỗi validate review:', err);
+        return res.status(500).json({ message: 'Lỗi xác thực dữ liệu review', error: err.message });
     }
-
-    // Làm sạch comment trước khi lưu
-    if (req.body.comment) {
-        req.body.comment = Filter.clean(req.body.comment);
-    }
-
-    next();
 };

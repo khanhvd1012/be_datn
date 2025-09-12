@@ -85,7 +85,6 @@ const cartItemSchema = Joi.object({
 
 export const validateVariant = (req, res, next) => {
     try {
-
         // Chuẩn hóa image_url từ file upload
         if (req.files && Array.isArray(req.files) && req.files.length > 0) {
             req.body.image_url = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
