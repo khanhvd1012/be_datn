@@ -135,9 +135,9 @@ export const getMyReviews = async (req, res) => {
         });
     }
 };
- 
 
- // lấy tất cả đánh giá
+
+// lấy tất cả đánh giá
 export const getAllReviews = async (req, res) => {
     try {
         const { page = 1, limit = 20 } = req.query;
@@ -197,6 +197,21 @@ export const getAllReviews = async (req, res) => {
     }
 };
 
+const deleteUploadedImages = (filesOrUrls = []) => {
+    filesOrUrls.forEach(item => {
+        let filename = '';
+        if (typeof item === 'string') {
+            filename = item.split('/uploads/')[1];
+        } else if (item?.filename) {
+            filename = item.filename;
+        }
+        const filePath = path.join(__dirname, '../../public/uploads', filename);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+    });
+};
+
 // tạo đánh giá sản phẩm
 export const createReview = async (req, res) => {
     try {
@@ -245,13 +260,20 @@ export const createReview = async (req, res) => {
             });
         }
 
+        let imageUrls = [];
+        if (req.files && req.files.length > 0) {
+            const baseUrl = process.env.BASE_URL || "http://localhost:3000";
+            imageUrls = req.files.map(file => `${baseUrl}/uploads/${file.filename}`);
+        }
+
         const review = await review_MD.create({
             user_id: req.user._id,
             product_id,
             product_variant_id,
             rating,
             comment,
-            order_item: orderItem._id
+            order_item: orderItem._id,
+            images: imageUrls
         });
 
         return res.status(201).json({
@@ -259,6 +281,9 @@ export const createReview = async (req, res) => {
             review,
         });
     } catch (error) {
+        if (req.files && req.files.length > 0) {
+            deleteUploadedImages(req.files);
+        }
         return res.status(500).json({
             success: false,
             message: "lỗi khi đánh giá sản phẩm",
@@ -270,30 +295,70 @@ export const createReview = async (req, res) => {
 // cập nhật đánh giá sản phẩm
 export const updateReview = async (req, res) => {
     try {
-        const review = await review_MD.findByIdAndUpdate({
+        // Tìm review hiện tại theo id + user_id
+        const currentReview = await review_MD.findOne({
             _id: req.params.id,
             user_id: req.user._id
-        }, req.body, { new: true })
+        });
 
-        if (!review) {
+        if (!currentReview) {
             return res.status(404).json({
                 success: false,
-                message: "đánh giá sản phẩm không tồn tại"
-            })
+                message: "Đánh giá sản phẩm không tồn tại"
+            });
         }
+
+        let imageUrls = [...(currentReview.images || [])];
+
+        // Chuẩn hóa existingImages từ client
+        let existingImages = [];
+        if (req.body.existingImages) {
+            if (typeof req.body.existingImages === "string") {
+                existingImages = req.body.existingImages.split(",");
+            } else if (Array.isArray(req.body.existingImages)) {
+                existingImages = req.body.existingImages;
+            }
+
+            // Giữ lại ảnh client yêu cầu
+            const removedImages = imageUrls.filter(oldUrl => !existingImages.includes(oldUrl));
+            if (removedImages.length > 0) {
+                deleteUploadedImages(removedImages); // xoá file cũ
+            }
+
+            imageUrls = existingImages;
+        }
+
+        // Nếu có ảnh mới, thêm vào
+        if (req.files && req.files.length > 0) {
+            const baseUrl = process.env.BASE_URL || "http://localhost:3000";
+            const newImages = req.files.map(file => `${baseUrl}/uploads/${file.filename}`);
+            imageUrls = [...imageUrls, ...newImages];
+        }
+
+        req.body.images = imageUrls;
+        delete req.body.existingImages;
+
+        const updatedReview = await review_MD.findByIdAndUpdate(
+            currentReview._id,
+            req.body,
+            { new: true }
+        );
 
         return res.status(200).json({
             success: true,
-            review
-        })
+            review: updatedReview
+        });
     } catch (error) {
+        if (req.files && req.files.length > 0) {
+            deleteUploadedImages(req.files);
+        }
         return res.status(500).json({
             success: false,
-            message: "lỗi khi cập nhật đánh giá sản phẩm",
+            message: "Lỗi khi cập nhật đánh giá sản phẩm",
             error: error.message
-        })
+        });
     }
-}
+};
 
 // xóa đánh giá sản phẩm
 export const deleteReview = async (req, res) => {

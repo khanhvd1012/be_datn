@@ -91,6 +91,8 @@ const orderSchema = new mongoose.Schema({
         ref: 'User',
         default: null
     },
+    shipping_fee: { type: Number, default: 0 },
+    shipping_service: { type: String, default: null },
 }, {
     timestamps: true,
     toJSON: { virtuals: true },

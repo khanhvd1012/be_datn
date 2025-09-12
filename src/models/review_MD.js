@@ -11,6 +11,11 @@ const reviewSchema = new mongoose.Schema({
         ref: "OrderItem",
         required: true
     },
+    images: [{
+        type: String,
+        required: true,
+        trim: true
+    }],
     product_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Products",

@@ -317,7 +317,6 @@ export const createOrder = async (req, res) => {
     }
 };
 
-
 // lấy tất cả đơn hàng
 export const getAllOrderUser = async (req, res) => {
     // Kiểm tra người dùng đã đăng nhập chưa
@@ -856,7 +855,7 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
         embed_data: JSON.stringify(embed_data),
         description: `Thanh toán đơn hàng #${orderId}`,
         bank_code: "",
-        callback_url: "https://e57cec3bb8b7.ngrok-free.app/payment/zalopay/callback",
+        callback_url: "https://86c83304c25a.ngrok-free.app/payment/zalopay/callback",
     };
 
     const data = `${config.app_id}|${order.app_trans_id}|${order.app_user}|${order.amount}|${order.app_time}|${order.embed_data}|${order.item}`;
