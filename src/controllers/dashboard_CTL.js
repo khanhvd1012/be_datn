@@ -88,8 +88,7 @@ export const getDashboardStats = async (req, res) => {
                     totalRevenue: 1
                 }
             },
-            { $sort: { totalSales: -1 } },
-            { $limit: 5 }
+            { $sort: { totalSales: -1 } }
         ]);
 
         let { startDate, endDate } = req.query;
@@ -107,24 +106,24 @@ export const getDashboardStats = async (req, res) => {
             end = new Date(today.setHours(23, 59, 59, 999));
         }
 
+        // --- thống kê đơn hàng theo ngày ---
         const ordersByDateAgg = await Order.aggregate([
             {
                 $match: {
-                    createdAt: { $gte: start, $lte: end }
-                }
+                    createdAt: { $gte: start, $lte: end },
+                },
             },
             {
                 $group: {
                     _id: {
-                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
+                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
                     },
-                    orders: { $sum: 1 }
-                }
+                    orders: { $sum: 1 },
+                },
             },
-            { $sort: { _id: 1 } }
+            { $sort: { _id: 1 } },
         ]);
 
-        // Tạo mảng ngày liên tục
         const ordersByDate = [];
         let cur = new Date(start.getTime());
         while (cur <= end) {
@@ -137,27 +136,58 @@ export const getDashboardStats = async (req, res) => {
             cur.setDate(cur.getDate() + 1);
         }
 
-        const now = new Date();
-        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-
-        const monthlyRevenueAgg = await Order.aggregate([
+        // --- doanh thu theo khoảng ngày ---
+        const revenueAgg = await Order.aggregate([
             {
                 $match: {
                     status: "delivered",
-                    delivered_at: { $gte: firstDay, $lte: lastDay } 
-                }
+                    delivered_at: { $gte: start, $lte: end },
+                },
             },
             {
                 $group: {
                     _id: null,
-                    revenue: { $sum: "$total_price" } // tổng tiền của các đơn đã giao
-                }
-            }
+                    revenue: { $sum: "$total_price" },
+                },
+            },
         ]);
 
-        const monthlyRevenue = monthlyRevenueAgg[0]?.revenue || 0;
+        const currentYear = new Date().getFullYear();
+        const fiveYearsAgo = currentYear - 4;
 
+        const revenueByYearAgg = await Order.aggregate([
+            {
+                $match: {
+                    status: "delivered",
+                    delivered_at: {
+                        $gte: new Date(`${fiveYearsAgo}-01-01`),
+                        $lte: new Date(`${currentYear}-12-31`),
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: { $year: "$delivered_at" },
+                    revenue: { $sum: "$total_price" },
+                },
+            },
+            { $sort: { _id: 1 } },
+            {
+                $project: {
+                    year: "$_id",
+                    revenue: 1,
+                    _id: 0,
+                },
+            },
+        ]);
+
+        const years = Array.from({ length: 5 }, (_, i) => fiveYearsAgo + i);
+        const revenueByYear = years.map((year) => {
+            const found = revenueByYearAgg.find((item) => item.year === year);
+            return found || { year };
+        });
+
+        const revenue = revenueAgg[0]?.revenue || 0;
 
         res.json({
             success: true,
@@ -168,7 +198,8 @@ export const getDashboardStats = async (req, res) => {
                 totalOrders,
                 totalUsers,
                 ordersByDate,
-                monthlyRevenue
+                revenue,
+                revenueByYear
             }
         });
     } catch (error) {
