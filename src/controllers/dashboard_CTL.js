@@ -152,16 +152,24 @@ export const getDashboardStats = async (req, res) => {
             },
         ]);
 
+        let { startYear, endYear } = req.query;
         const currentYear = new Date().getFullYear();
-        const fiveYearsAgo = currentYear - 4;
+
+        if (!startYear || !endYear) {
+            endYear = currentYear;
+            startYear = endYear - 4; 
+        } else {
+            startYear = parseInt(startYear, 10);
+            endYear = parseInt(endYear, 10);
+        }
 
         const revenueByYearAgg = await Order.aggregate([
             {
                 $match: {
                     status: "delivered",
                     delivered_at: {
-                        $gte: new Date(`${fiveYearsAgo}-01-01`),
-                        $lte: new Date(`${currentYear}-12-31`),
+                        $gte: new Date(`${startYear}-01-01`),
+                        $lte: new Date(`${endYear}-12-31`),
                     },
                 },
             },
@@ -181,10 +189,10 @@ export const getDashboardStats = async (req, res) => {
             },
         ]);
 
-        const years = Array.from({ length: 5 }, (_, i) => fiveYearsAgo + i);
+        const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
         const revenueByYear = years.map((year) => {
             const found = revenueByYearAgg.find((item) => item.year === year);
-            return found || { year };
+            return found || { year, revenue: 0 };
         });
 
         const revenue = revenueAgg[0]?.revenue || 0;
