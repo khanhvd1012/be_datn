@@ -210,6 +210,7 @@ export const postMessageUser = async (req, res) => {
 
     await ChatRoom.findByIdAndUpdate(chatRoom._id, { $set: { lastMessage: customerMessage._id } });
 
+
     let aiReply = null;
     let aiShouldReply = !chatRoom.isEmployeeJoined;
     if (chatRoom.isEmployeeJoined && chatRoom.lastEmployeeMessageAt) {
@@ -279,14 +280,14 @@ export const postMessageUser = async (req, res) => {
 
       const productDetails = variants.length > 0
         ? variants.map((v) => [
-            `Tên: ${v.product_id?.name || 'N/A'}`,
-            `Giá: ${v.price ?? 'N/A'}`,
-            `Màu: ${v.color?.name || 'N/A'}`,
-            `Size: ${Array.isArray(v.size) ? v.size.map((s) => s.size).join(', ') : v.size?.size ?? 'N/A'}`,
-            `Tồn kho: ${v.stockInfo ?? 'Không rõ'}`,
-            `Thương hiệu: ${v.product_id?.brand?.name || 'N/A'}`,
-            `Danh mục: ${v.product_id?.category?.name || 'N/A'}`,
-          ].join(' | ')).join('\n')
+          `Tên: ${v.product_id?.name || 'N/A'}`,
+          `Giá: ${v.price ?? 'N/A'}`,
+          `Màu: ${v.color?.name || 'N/A'}`,
+          `Size: ${Array.isArray(v.size) ? v.size.map((s) => s.size).join(', ') : v.size?.size ?? 'N/A'}`,
+          `Tồn kho: ${v.stockInfo ?? 'Không rõ'}`,
+          `Thương hiệu: ${v.product_id?.brand?.name || 'N/A'}`,
+          `Danh mục: ${v.product_id?.category?.name || 'N/A'}`,
+        ].join(' | ')).join('\n')
         : '';
 
       const fullContext = (context ? context + '\n' : '') + (productDetails ? `Chi tiết sản phẩm:\n${productDetails}` : '');
@@ -310,10 +311,11 @@ export const postMessageUser = async (req, res) => {
       });
 
       await ChatRoom.findByIdAndUpdate(chatRoom._id, { $set: { lastMessage: aiMessage._id } });
+
     }
 
     const messages = await Message.find({ chatRoom_id: chatRoom._id })
-      .populate('sender_id', 'username')
+      .populate('sender_id', 'username role')
       .sort({ createdAt: 1 })
       .lean();
 
@@ -367,8 +369,6 @@ export const postMessageAdmin = async (req, res) => {
         { new: true }
       );
 
-      // Tùy chọn: Emit sự kiện WebSocket
-      // io.to(chatRoomId).emit('admin_joined', { message: systemMessage });
     }
 
     const newMessage = await Message.create({
@@ -381,21 +381,24 @@ export const postMessageAdmin = async (req, res) => {
 
     await ChatRoom.findByIdAndUpdate(
       chatRoomId,
-      { 
-        $set: { 
+      {
+        $set: {
           lastMessage: newMessage._id,
           lastEmployeeMessageAt: new Date()
-        } 
+        }
       }
     );
 
-    // Tùy chọn: Emit sự kiện WebSocket
-    // io.to(chatRoomId).emit('new_message', { message: newMessage });
+
+    const populatedMessage = await Message.findById(newMessage._id)
+      .populate('sender_id', 'username role')
+      .lean();
 
     return res.status(200).json({
       message: 'Tin nhắn đã được gửi',
-      newMessage,
+      newMessage: populatedMessage,
     });
+
   } catch (error) {
     console.error('Lỗi postMessageAdmin:', error);
     return res.status(500).json({ message: 'Lỗi khi gửi tin nhắn', error: error.message });
@@ -426,8 +429,6 @@ export const putMessage = async (req, res) => {
     message.content = content.trim();
     await message.save();
 
-    // Tùy chọn: Emit sự kiện WebSocket
-    // io.to(message.chatRoom_id.toString()).emit('message_updated', { message });
 
     return res.status(200).json({
       message: 'Tin nhắn đã được chỉnh sửa',

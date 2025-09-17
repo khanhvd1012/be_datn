@@ -2,15 +2,6 @@ import Joi from 'joi';
 
 /**
  * Schema validation cho voucher
- * Bao gồm các trường:
- * - code: Mã voucher (3-20 ký tự, viết hoa)
- * - type: Loại voucher (percentage hoặc fixed)
- * - value: Giá trị giảm giá (số dương, tối đa 100% nếu là percentage)
- * - maxDiscount: Giảm giá tối đa (số dương, có thể null)
- * - minOrderValue: Giá trị đơn hàng tối thiểu (số dương, mặc định 0)
- * - startDate: Ngày bắt đầu (phải sau thời điểm hiện tại)
- * - endDate: Ngày kết thúc (phải sau ngày bắt đầu)
- * - quantity: Số lượng voucher (số nguyên dương)
  */
 const voucherSchema = Joi.object({
     code: Joi.string()
@@ -63,10 +54,17 @@ const voucherSchema = Joi.object({
 
     startDate: Joi.date()
         .required()
-        .min('now')
+        .custom((value, helpers) => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // reset về 00:00 hôm nay
+            if (value < today) {
+                return helpers.error('date.minToday');
+            }
+            return value;
+        })
         .messages({
             'date.base': 'Ngày bắt đầu không hợp lệ',
-            'date.min': 'Ngày bắt đầu phải sau thời điểm hiện tại'
+            'date.minToday': 'Ngày bắt đầu phải từ hôm nay trở đi'
         }),
 
     endDate: Joi.date()
@@ -74,7 +72,7 @@ const voucherSchema = Joi.object({
         .min(Joi.ref('startDate'))
         .messages({
             'date.base': 'Ngày kết thúc không hợp lệ',
-            'date.min': 'Ngày kết thúc phải sau ngày bắt đầu'
+            'date.min': 'Ngày kết thúc phải sau hoặc bằng ngày bắt đầu'
         }),
 
     quantity: Joi.number()
@@ -104,9 +102,6 @@ const voucherSchema = Joi.object({
 
 /**
  * Middleware validate dữ liệu voucher
- * @param {Object} req - Request object chứa thông tin voucher cần validate
- * @param {Object} res - Response object
- * @param {Function} next - Callback function để chuyển sang middleware tiếp theo
  */
 export const validateVoucher = (req, res, next) => {
     const { error } = voucherSchema.validate(req.body, { abortEarly: false });
