@@ -124,7 +124,7 @@ export const validateReview = (req, res, next) => {
 
     try {
         // Làm sạch comment (nếu muốn clean tự động)
-        if (req.body.comment) {
+        if (req.body && req.body.comment) {
             req.body.comment = Filter.clean(req.body.comment);
         }
 
