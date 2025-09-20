@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Hàm xoá file upload
-const deleteUploadedImages = (files = []) => {
+const deleteImages = (files = []) => {
   files.forEach(item => {
     let filename = '';
     if (!item) return;
@@ -71,8 +71,18 @@ export const getNewsById = async (req, res) => {
 // Tạo tin tức
 export const createNews = async (req, res) => {
   try {
-    const images =
-      req.files?.map((file) => `http://localhost:3000/uploads/${file.filename}`) || [];
+
+    const { title } = req.body;
+
+    const exists = await news_MD.findOne({ title });
+    if (exists) {
+      if (req.files) {
+        deleteImages(req.files.map(f => `http://localhost:3000/uploads/${f.filename}`));
+      }
+      return res.status(400).json({ message: "Tiêu đề đã tồn tại, vui lòng chọn tên khác" });
+    }
+
+    const images = req.files?.map((file) => `http://localhost:3000/uploads/${file.filename}`) || [];
 
     const MAX_IMAGES = 5;
 
@@ -109,6 +119,8 @@ export const createNews = async (req, res) => {
 export const updateNews = async (req, res) => {
   try {
     const { id } = req.params;
+    const { title } = req.body;
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       if (req.files) deleteImages(req.files.map(f => `http://localhost:3000/uploads/${f.filename}`));
       return res.status(400).json({ message: "ID không hợp lệ" });
@@ -118,6 +130,16 @@ export const updateNews = async (req, res) => {
     if (!news) {
       if (req.files) deleteImages(req.files.map(f => `http://localhost:3000/uploads/${f.filename}`));
       return res.status(404).json({ message: "Tin tức không tồn tại" });
+    }
+
+    if (title) {
+      const exists = await news_MD.findOne({ title, _id: { $ne: id } });
+      if (exists) {
+        if (req.files) {
+          deleteImages(req.files.map(f => `http://localhost:3000/uploads/${f.filename}`));
+        }
+        return res.status(400).json({ message: "Tiêu đề đã tồn tại, vui lòng chọn tên khác" });
+      }
     }
 
     let imageUrls = [...(news.images || [])]; // mặc định giữ lại ảnh cũ
