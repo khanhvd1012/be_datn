@@ -93,7 +93,8 @@ export const createOrder = async (req, res) => {
                 return res.status(404).json({ message: "Không tìm thấy địa chỉ giao hàng đã chọn" });
             }
 
-            fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}`;
+            // ✅ Format địa chỉ đầy đủ bao gồm tên phường/xã, quận/huyện, tỉnh/thành
+            fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}, ${existingAddress.ward_name}, ${existingAddress.district_name}, ${existingAddress.province_name}`;
             provinceName = existingAddress.province_name;
             districtName = existingAddress.district_name;
             wardName = existingAddress.ward_name;
@@ -262,6 +263,21 @@ export const createOrder = async (req, res) => {
         }));
         const orderItems = await OrderItem_MD.insertMany(orderItemData);
 
+        // --- Chuẩn bị response data ---
+        const responseData = {
+            ...order.toObject(),
+            chiTietDonHang: orderItems,
+            tongGoc: sub_total,
+            giamGia: voucher_discount,
+            phiShip: shippingFee,
+            dichVuShip: shippingService,
+            tongThanhToan: total_price,
+            // ✅ Thêm thông tin địa chỉ vào response
+            province_name: provinceName,
+            district_name: districtName,
+            ward_name: wardName
+        };
+
         // --- Thanh toán ZaloPay ---
         if (payment_method === "ZALOPAY") {
             const zpResult = await createZaloPayPayment(total_price, order._id, user_id, app_trans_id);
@@ -269,15 +285,7 @@ export const createOrder = async (req, res) => {
                 return res.status(201).json({
                     redirectUrl: zpResult.order_url,
                     message: "Đang chuyển hướng đến ZaloPay",
-                    donHang: {
-                        ...order.toObject(),
-                        chiTietDonHang: orderItems,
-                        tongGoc: sub_total,
-                        giamGia: voucher_discount,
-                        phiShip: shippingFee,
-                        dichVuShip: shippingService,
-                        tongThanhToan: total_price
-                    }
+                    donHang: responseData
                 });
             } else {
                 return res.status(500).json({ message: "Không thể tạo thanh toán ZaloPay", zpResult });
@@ -302,14 +310,7 @@ export const createOrder = async (req, res) => {
 
         return res.status(201).json({
             message: "Đơn hàng đã được tạo thành công",
-            donHang: {
-                ...order.toObject(),
-                chiTietDonHang: orderItems,
-                tongGoc: sub_total,
-                giamGia: voucher_discount,
-                phiShip: shippingFee,
-                tongThanhToan: total_price
-            }
+            donHang: responseData
         });
     } catch (error) {
         console.error("Lỗi khi tạo đơn hàng:", error);
@@ -1026,7 +1027,9 @@ export const buyNowOrder = async (req, res) => {
             if (!existingAddress) {
                 return res.status(404).json({ message: "Không tìm thấy địa chỉ giao hàng đã chọn" });
             }
-            fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}`;
+
+            // ✅ Format địa chỉ đầy đủ bao gồm tên phường/xã, quận/huyện, tỉnh/thành
+            fullShippingAddress = `${existingAddress.full_name} - ${existingAddress.phone} - ${existingAddress.address}, ${existingAddress.ward_name}, ${existingAddress.district_name}, ${existingAddress.province_name}`;
             provinceName = existingAddress.province_name;
             districtName = existingAddress.district_name;
             wardName = existingAddress.ward_name;
@@ -1152,6 +1155,21 @@ export const buyNowOrder = async (req, res) => {
             price
         });
 
+        // --- Chuẩn bị response data ---
+        const responseData = {
+            ...order.toObject(),
+            chiTietDonHang: [orderItem],
+            tongGoc: sub_total,
+            giamGia: voucher_discount,
+            phiShip: shippingFee,
+            dichVuShip: shippingService,
+            tongThanhToan: total_price,
+            // ✅ Thêm thông tin địa chỉ vào response
+            province_name: provinceName,
+            district_name: districtName,
+            ward_name: wardName
+        };
+
         // --- Thanh toán ZaloPay ---
         if (payment_method === "ZALOPAY") {
             const zpResult = await createZaloPayPayment(total_price, order._id, user_id, app_trans_id);
@@ -1159,15 +1177,7 @@ export const buyNowOrder = async (req, res) => {
                 return res.status(201).json({
                     redirectUrl: zpResult.order_url,
                     message: "Đang chuyển hướng đến ZaloPay",
-                    donHang: {
-                        ...order.toObject(),
-                        chiTietDonHang: [orderItem],
-                        tongGoc: sub_total,
-                        giamGia: voucher_discount,
-                        phiShip: shippingFee,
-                        dichVuShip: shippingService,
-                        tongThanhToan: total_price
-                    }
+                    donHang: responseData
                 });
             } else {
                 return res.status(500).json({ message: "Không thể tạo thanh toán ZaloPay", zpResult });
@@ -1189,15 +1199,7 @@ export const buyNowOrder = async (req, res) => {
         // --- COD ---
         return res.status(201).json({
             message: "Đơn hàng 'Mua ngay' đã được tạo thành công",
-            donHang: {
-                ...order.toObject(),
-                chiTietDonHang: [orderItem],
-                tongGoc: sub_total,
-                giamGia: voucher_discount,
-                phiShip: shippingFee,
-                dichVuShip: shippingService,
-                tongThanhToan: total_price
-            }
+            donHang: responseData
         });
 
     } catch (error) {
@@ -1208,7 +1210,6 @@ export const buyNowOrder = async (req, res) => {
         });
     }
 };
-
 export const returnOrderByCustomer = async (req, res) => {
     try {
         const order = await Order_MD.findById(req.params.id);
