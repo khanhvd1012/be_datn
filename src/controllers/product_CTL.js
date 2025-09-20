@@ -314,6 +314,12 @@ export const updateProduct = async (req, res, next) => {
             data: updatedProduct
         });
     } catch (error) {
+        if (error.code === 11000 && error.keyPattern?.slug) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tên sản phẩm đã tồn tại, vui lòng đổi tên khác!',
+            });
+        }
         next(error);
     }
 };

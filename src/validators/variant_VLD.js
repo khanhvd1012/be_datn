@@ -62,21 +62,26 @@ const variantSchema = Joi.object({
         .optional()
         .messages({
             'number.base': 'Chiều dài phải là số',
-            'number.min': 'Chiều dài không được âm'
+            'number.min': 'Chiều dài không được âm',
+            'number.empty': 'Chiều dài không được để trống'
         }),
     width: Joi.number()
         .min(0)
         .optional()
         .messages({
             'number.base': 'Chiều rộng phải là số',
-            'number.min': 'Chiều rộng không được âm'
+            'number.min': 'Chiều rộng không được âm',
+            'number.empty': 'Chiều dài không được để trống'
+
         }),
     height: Joi.number()
         .min(0)
         .optional()
         .messages({
             'number.base': 'Chiều cao phải là số',
-            'number.min': 'Chiều cao không được âm'
+            'number.min': 'Chiều cao không được âm',
+            'number.empty': 'Chiều dài không được để trống'
+
         })
 });
 
