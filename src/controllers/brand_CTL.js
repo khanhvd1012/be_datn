@@ -4,6 +4,7 @@ import Product from "../models/product_MD";
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import product_MD from '../models/product_MD';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -161,13 +162,10 @@ export const deleteBrand = async (req, res) => {
         }
 
         // Kiểm tra sản phẩm có đang dùng thương hiệu
-        const productsCount = await Product.countDocuments({ brand: req.params.id });
-        if (productsCount > 0) {
-            return res.status(400).json({
-                message: 'Không thể xóa thương hiệu vì có sản phẩm đang sử dụng',
-                productsCount
-            });
-        }
+        await product_MD.updateMany(
+            { brand: req.params.id },
+            { $unset: { brand: "" } }
+        );
 
         // Xoá thương hiệu
         await brand_MD.findByIdAndDelete(req.params.id);

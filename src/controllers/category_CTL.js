@@ -115,16 +115,23 @@ export const deleteCategory = async (req, res) => {
             return res.status(404).json({ message: 'Danh mục không tồn tại' });
         }
 
+        // Xóa logo nếu có
         if (category.logo_image) {
             const filename = category.logo_image.split('/uploads/')[1];
             const filePath = path.join(__dirname, "../../public/uploads", filename);
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
 
-        await product_MD.deleteMany({ category: req.params.id });
+        // 👉 Gỡ id category khỏi sản phẩm
+        await product_MD.updateMany(
+            { category: req.params.id },
+            { $unset: { category: "" } }
+        );
+
+        // Xóa danh mục
         await category_MD.findByIdAndDelete(req.params.id);
 
-        res.status(200).json({ message: 'Danh mục và sản phẩm con đã được xoá' });
+        res.status(200).json({ message: 'Danh mục đã xoá, id category trong sản phẩm cũng được gỡ bỏ' });
     } catch (error) {
         console.error('Lỗi khi xoá danh mục:', error);
         res.status(500).json({ message: 'Lỗi máy chủ nội bộ' });

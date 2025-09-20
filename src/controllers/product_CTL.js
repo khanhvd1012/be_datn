@@ -243,28 +243,70 @@ export const updateProduct = async (req, res, next) => {
             throw new AppError('Không tìm thấy sản phẩm', 404);
         }
 
-        // Kiểm tra category và brand mới nếu có thay đổi
-        if (req.body.category && req.body.category !== product.category.toString()) {
+        if (req.body.category && req.body.category !== (product.category?.toString() || null)) {
             const category = await mongoose.model('Categories').findById(req.body.category);
             if (!category) {
                 throw new AppError('Danh mục không tồn tại', 404);
             }
         }
-        if (req.body.brand && req.body.brand !== product.brand.toString()) {
+
+        if (req.body.brand && req.body.brand !== (product.brand?.toString() || null)) {
             const brand = await mongoose.model('Brands').findById(req.body.brand);
             if (!brand) {
                 throw new AppError('Thương hiệu không tồn tại', 404);
             }
         }
+
         if (req.body.name) {
             req.body.slug = slugify(req.body.name, { lower: true, strict: true });
         }
+
+        const oldBrand = product.brand?.toString() || null;
+        const oldCategory = product.category?.toString() || null;
 
         const updatedProduct = await Product.findByIdAndUpdate(
             req.params.id,
             req.body,
             { new: true, runValidators: true }
         ).populate(['category', 'brand', 'variants']);
+
+        // ---- Cập nhật Brand ----
+        if (req.body.brand) {
+            const newBrand = req.body.brand;
+
+            // Nếu đổi brand thì xoá khỏi brand cũ
+            if (oldBrand && oldBrand !== newBrand) {
+                await mongoose.model('Brands').findByIdAndUpdate(
+                    oldBrand,
+                    { $pull: { products: product._id } }
+                );
+            }
+
+            // Thêm vào brand mới
+            await mongoose.model('Brands').findByIdAndUpdate(
+                newBrand,
+                { $addToSet: { products: product._id } }
+            );
+        }
+
+        // ---- Cập nhật Category ----
+        if (req.body.category) {
+            const newCategory = req.body.category;
+
+            // Nếu đổi category thì xoá khỏi category cũ
+            if (oldCategory && oldCategory !== newCategory) {
+                await mongoose.model('Categories').findByIdAndUpdate(
+                    oldCategory,
+                    { $pull: { products: product._id } }
+                );
+            }
+
+            // Thêm vào category mới
+            await mongoose.model('Categories').findByIdAndUpdate(
+                newCategory,
+                { $addToSet: { products: product._id } }
+            );
+        }
 
         return res.status(200).json({
             success: true,
