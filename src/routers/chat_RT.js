@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { 
+import {
   getMessageUser,
   getMessageAdmin,
   getOneMessageUser,
@@ -10,6 +10,7 @@ import {
 import authMiddleware from '../middleware/auth_MID.js';
 import checkRole from '../middleware/checkRole_MID.js';
 import { ROLES } from '../config/roles.js';
+import upload from '../middleware/upload_MID.js';
 
 const Chatrouter = Router()
 
@@ -23,7 +24,7 @@ Chatrouter.get('/admin/rooms', authMiddleware, checkRole(ROLES.EMPLOYEE, ROLES.A
 Chatrouter.get('/admin/rooms/:chatRoomId', authMiddleware, checkRole(ROLES.EMPLOYEE, ROLES.ADMIN), getOneMessageUser);
 
 // Endpoint dành cho USER: Gửi tin nhắn vào phòng chat duy nhất
-Chatrouter.post('/user/send', authMiddleware, postMessageUser);
+Chatrouter.post('/user/send', authMiddleware, upload.array("images", 5), postMessageUser);
 
 // Endpoint dành cho ADMIN: Gửi tin nhắn và tham gia phòng chat
 Chatrouter.post('/admin/send/:chatRoomId', authMiddleware, checkRole(ROLES.EMPLOYEE, ROLES.ADMIN), postMessageAdmin);

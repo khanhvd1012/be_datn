@@ -18,7 +18,7 @@ const chatRoomSchema = new mongoose.Schema({
   },
   lastEmployeeMessageAt: {
     type: Date,
-    default: null, 
+    default: null,
   },
 }, {
   timestamps: true,

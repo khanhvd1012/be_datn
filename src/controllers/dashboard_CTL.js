@@ -147,7 +147,7 @@ export const getDashboardStats = async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    revenue: { $sum: "$total_price" },
+                    revenue: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } },
                 },
             },
         ]);
@@ -157,7 +157,7 @@ export const getDashboardStats = async (req, res) => {
 
         if (!startYear || !endYear) {
             endYear = currentYear;
-            startYear = endYear - 4; 
+            startYear = endYear - 4;
         } else {
             startYear = parseInt(startYear, 10);
             endYear = parseInt(endYear, 10);
@@ -176,7 +176,7 @@ export const getDashboardStats = async (req, res) => {
             {
                 $group: {
                     _id: { $year: "$delivered_at" },
-                    revenue: { $sum: "$total_price" },
+                    revenue: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } },
                 },
             },
             { $sort: { _id: 1 } },

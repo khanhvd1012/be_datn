@@ -8,6 +8,13 @@ import Colors_MD from '../models/color_MD.js';
 import stock_MD from '../models/stock_MD.js';
 import Variant_MD from '../models/variant_MD.js';
 import mongoose from 'mongoose';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import cron from 'node-cron';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Bộ giới hạn tốc độ
 const lastMessageAt = new Map();
@@ -176,6 +183,36 @@ export const getOneMessageUser = async (req, res) => {
   }
 };
 
+const UPLOAD_DIR = path.join(__dirname, '../../public/uploads');
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const deleteOldUploadedImages = async () => {
+  try {
+    const files = await fs.readdir(UPLOAD_DIR);
+
+    for (const file of files) {
+      const filePath = path.join(UPLOAD_DIR, file);
+      const stats = await fs.stat(filePath);
+
+      if (Date.now() - stats.mtimeMs > SEVEN_DAYS_MS) {
+        try {
+          await fs.unlink(filePath);
+          console.log(`Đã xóa file cũ: ${file}`);
+        } catch (err) {
+          console.error(`Không thể xóa file ${file}:`, err.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Lỗi khi quét thư mục uploads:', err.message);
+  }
+};
+
+cron.schedule('0 0 * * *', async () => {
+  console.log('Bắt đầu xoá các ảnh cũ > 7 ngày');
+  await deleteOldUploadedImages();
+});
+
 // Endpoint: User gửi tin nhắn vào phòng chat duy nhất
 export const postMessageUser = async (req, res) => {
   try {
@@ -185,6 +222,17 @@ export const postMessageUser = async (req, res) => {
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     if (!content || typeof content !== 'string' || !content.trim()) {
       return res.status(400).json({ message: 'Yêu cầu nội dung tin nhắn' });
+    }
+
+    let imageUrls = [];
+    if (req.files && req.files.length > 0) {
+      imageUrls = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+    }
+
+    const MAX_IMAGES = 5;
+    if (imageUrls.length > MAX_IMAGES) {
+      if (req.files && req.files.length > 0) deleteOldUploadedImages(req.files);
+      return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
     }
 
     // Tìm phòng chat duy nhất của user
@@ -206,6 +254,7 @@ export const postMessageUser = async (req, res) => {
       receiver_id: null,
       content: content.trim(),
       type: 'text',
+      images: imageUrls,
     });
 
     await ChatRoom.findByIdAndUpdate(chatRoom._id, { $set: { lastMessage: customerMessage._id } });
@@ -329,6 +378,7 @@ export const postMessageUser = async (req, res) => {
     return res.status(500).json({ message: 'Lỗi khi gửi tin nhắn', error: error.message });
   }
 };
+
 //  Endpoint: Admin gửi tin nhắn và tham gia phòng chat
 export const postMessageAdmin = async (req, res) => {
   try {
@@ -341,6 +391,17 @@ export const postMessageAdmin = async (req, res) => {
     }
     if (!content || typeof content !== 'string' || !content.trim()) {
       return res.status(400).json({ message: 'Yêu cầu nội dung tin nhắn' });
+    }
+
+    let imageUrls = [];
+    if (req.files && req.files.length > 0) {
+      imageUrls = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+    }
+
+    const MAX_IMAGES = 5;
+    if (imageUrls.length > MAX_IMAGES) {
+      if (req.files && req.files.length > 0) deleteOldUploadedImages(req.files);
+      return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
     }
 
     const admin = await User.findById(adminId, 'username');
@@ -377,6 +438,7 @@ export const postMessageAdmin = async (req, res) => {
       receiver_id: chatRoom.participants.find((id) => id.toString() !== adminId.toString()) || null,
       content: content.trim(),
       type: 'text',
+      images: imageUrls,
     });
 
     await ChatRoom.findByIdAndUpdate(
