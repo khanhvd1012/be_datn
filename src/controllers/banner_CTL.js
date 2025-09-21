@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 // Lấy tất cả banner có trạng thái hiển thị
 export const getAllBanners = async (req, res) => {
   try {
-    const banners = await banner_MD.find().sort({ createdAt: -1 }); 
+    const banners = await banner_MD.find().sort({ createdAt: -1 });
     res.status(200).json(banners);
   } catch (error) {
     console.error("Lỗi khi lấy banner:", error);
@@ -33,6 +33,19 @@ export const getBannerById = async (req, res) => {
 // Tạo banner mới
 export const createBanner = async (req, res) => {
   try {
+    const { title } = req.body;
+
+    // Kiểm tra trùng tên
+    const exists = await banner_MD.findOne({ title });
+    if (exists) {
+      // Nếu có file upload thì xoá ngay để tránh rác
+      if (req.file) {
+        const filePath = path.join(__dirname, "../../public/uploads", req.file.filename);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+      return res.status(400).json({ message: "Tên banner đã tồn tại, vui lòng chọn tên khác" });
+    }
+
     if (req.file) {
       req.body.image = `http://localhost:3000/uploads/${req.file.filename}`;
     }
@@ -62,25 +75,32 @@ export const updateBanner = async (req, res) => {
       return res.status(404).json({ message: "Banner không tồn tại" });
     }
 
+    const { title } = req.body;
+    if (title) {
+      const exists = await banner_MD.findOne({ title, _id: { $ne: req.params.id } });
+      if (exists) {
+        if (req.file) {
+          const filePath = path.join(__dirname, "../../public/uploads", req.file.filename);
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        }
+        return res.status(400).json({ message: "Tên banner đã tồn tại, vui lòng chọn tên khác" });
+      }
+    }
+
     if (req.file) {
-      // Xoá ảnh cũ nếu có
       if (banner.image) {
         const oldFilename = banner.image.split("/uploads/")[1];
         const oldPath = path.join(__dirname, "../../public/uploads", oldFilename);
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
-
-      // Gán ảnh mới
       req.body.image = `http://localhost:3000/uploads/${req.file.filename}`;
     }
 
     const updated = await banner_MD.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.status(200).json({ message: "Cập nhật banner thành công", data: updated });
-
   } catch (error) {
     console.error("Lỗi khi cập nhật banner:", error);
 
-    // Nếu có file mới => xóa
     if (req.file) {
       const filePath = path.join(__dirname, "../../public/uploads", req.file.filename);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);

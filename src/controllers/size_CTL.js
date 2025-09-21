@@ -1,15 +1,26 @@
 import Size from '../models/size_MD.js';
-import Variant from '../models/variant_MD.js'; // Thêm dòng này
+import Variant from '../models/variant_MD.js'; 
 
 // Tạo size
 export const createSize = async (req, res) => {
     try {
+        const existingSize = await Size.findOne({ size: req.body.size });
+        if (existingSize) {
+            return res.status(400).json({
+                message: "Size đã tồn tại!"
+            });
+        }
         const size = await Size.create(req.body);
         return res.status(201).json({
             message: "Tạo size thành công",
             size
         });
     } catch (error) {
+        if (error.code === 11000) {
+            return res.status(400).json({
+                message: "Size đã tồn tại!"
+            });
+        }
         return res.status(400).json({
             message: error.message
         });
@@ -57,6 +68,15 @@ export const getSizeById = async (req, res) => {
 // Update size
 export const updateSize = async (req, res) => {
     try {
+        const existingSize = await Size.findOne({
+            size: req.body.size,
+            _id: { $ne: req.params.id }
+        });
+        if (existingSize) {
+            return res.status(400).json({
+                message: "Size đã tồn tại!"
+            });
+        }
         const size = await Size.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!size) {
             return res.status(404).json({
@@ -68,6 +88,11 @@ export const updateSize = async (req, res) => {
             size
         });
     } catch (error) {
+        if (error.code === 11000) {
+            return res.status(400).json({
+                message: "Size đã tồn tại!"
+            });
+        }
         return res.status(400).json({
             message: error.message
         });
