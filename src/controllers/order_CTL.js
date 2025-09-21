@@ -1232,6 +1232,24 @@ export const returnOrderByCustomer = async (req, res) => {
         if (order.status === 'returned' || order.status === 'canceled') {
             return res.status(400).json({ message: "Đơn hàng đã ở trạng thái không thể hoàn" });
         }
+        // Kiểm tra thời gian giao hàng
+        if (!order.delivered_at) {
+            return res.status(400).json({
+                message: "Không thể hoàn hàng vì thiếu thời điểm giao hàng"
+            });
+        }
+
+        // const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+        const sevenDaysMs = 1 * 60 * 1000;
+        const now = Date.now();
+        const deliveredAtMs = new Date(order.delivered_at).getTime();
+
+        // Chỉ cho phép hoàn trong vòng 7 ngày kể từ lúc nhận
+        if (now > deliveredAtMs + sevenDaysMs) {
+            return res.status(400).json({
+                message: "Chỉ được hoàn hàng trong vòng 7 ngày kể từ khi nhận hàng"
+            });
+        }
 
         // Lấy các sản phẩm của đơn
         const orderItems = await OrderItem_MD.find({ order_id: order._id });
@@ -1259,9 +1277,9 @@ export const returnOrderByCustomer = async (req, res) => {
 
         // Cập nhật trạng thái đơn hàng
         order.status = 'returned';
+        order.returned_at = new Date(); 
         await order.save();
 
-        // Gửi thông báo cho admin
         const adminUsers = await User_MD.find({ role: { $in: ['admin', 'employee'] } });
 
         for (const admin of adminUsers) {
@@ -1278,7 +1296,6 @@ export const returnOrderByCustomer = async (req, res) => {
             });
         }
 
-        // Thông báo xác nhận cho khách
         await Notification.create({
             user_id: req.user._id,
             title: 'Xác nhận hoàn hàng',
@@ -1293,7 +1310,7 @@ export const returnOrderByCustomer = async (req, res) => {
         return res.status(200).json({ message: "Hoàn hàng thành công", order });
 
     } catch (error) {
+        console.error("Chi tiết lỗi hoàn hàng:", error);
         return res.status(500).json({ message: "Lỗi hoàn hàng", error: error.message });
     }
 };
-
