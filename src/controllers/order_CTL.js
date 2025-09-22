@@ -856,7 +856,7 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
         embed_data: JSON.stringify(embed_data),
         description: `Thanh toán đơn hàng #${orderId}`,
         bank_code: "",
-        callback_url: "https://4e02abbe4e60.ngrok-free.app/payment/zalopay/callback",
+        callback_url: "https://65d77257fa61.ngrok-free.app/payment/zalopay/callback",
     };
 
     const data = `${config.app_id}|${order.app_trans_id}|${order.app_user}|${order.amount}|${order.app_time}|${order.embed_data}|${order.item}`;
