@@ -27,7 +27,7 @@ Chatrouter.get('/admin/rooms/:chatRoomId', authMiddleware, checkRole(ROLES.EMPLO
 Chatrouter.post('/user/send', authMiddleware, upload.array("images", 5), postMessageUser);
 
 // Endpoint dành cho ADMIN: Gửi tin nhắn và tham gia phòng chat
-Chatrouter.post('/admin/send/:chatRoomId', authMiddleware, checkRole(ROLES.EMPLOYEE, ROLES.ADMIN), postMessageAdmin);
+Chatrouter.post('/admin/send/:chatRoomId', authMiddleware, checkRole(ROLES.EMPLOYEE, ROLES.ADMIN), upload.array("images", 5), postMessageAdmin);
 
 // Endpoint dành cho ADMIN: Chỉnh sửa tin nhắn trong vòng 1 giờ
 Chatrouter.put('/admin/message', authMiddleware, checkRole(ROLES.EMPLOYEE, ROLES.ADMIN), putMessage);

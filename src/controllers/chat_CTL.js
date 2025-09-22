@@ -252,7 +252,7 @@ export const postMessageUser = async (req, res) => {
 
     const MAX_IMAGES = 5;
     if (imageUrls.length > MAX_IMAGES) {
-      if (req.files && req.files.length > 0) deleteUploadedFiles(req.files);
+      if (req.files && req.files.length > 0) await deleteUploadedFiles(req.files);
       return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
     }
 
@@ -276,7 +276,7 @@ export const postMessageUser = async (req, res) => {
       sender_id: userId,
       receiver_id: null,
       content: content.trim(),
-      type: 'text',
+      type: imageUrls.length > 0 ? 'image' : 'text',
       images: imageUrls,
     });
 
@@ -425,7 +425,7 @@ export const postMessageAdmin = async (req, res) => {
 
     const MAX_IMAGES = 5;
     if (imageUrls.length > MAX_IMAGES) {
-      if (req.files && req.files.length > 0) deleteUploadedFiles(req.files);
+      if (req.files && req.files.length > 0) await deleteUploadedFiles(req.files);
       return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
     }
 
@@ -466,7 +466,7 @@ export const postMessageAdmin = async (req, res) => {
       sender_id: adminId,
       receiver_id: chatRoom.participants.find((id) => id.toString() !== adminId.toString()) || null,
       content: content.trim(),
-      type: 'text',
+      type: imageUrls.length > 0 ? 'image' : 'text',
       images: imageUrls,
     });
 
