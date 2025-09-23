@@ -32,7 +32,8 @@ const notificationSchema = new mongoose.Schema({
             'return_request',        // Yêu cầu hoàn hàng mới
             'return_accepted',       // Admin chấp nhận hoàn hàng
             'return_rejected',       // Admin từ chối hoàn hàng
-            'order_confirmed'        // Khách hàng xác nhận nhận hàng
+            'order_confirmed',        // Khách hàng xác nhận nhận hàng
+            'payment_status'
         ],
         required: true
     },
@@ -97,6 +98,10 @@ const notificationSchema = new mongoose.Schema({
         },
         canceled_by: {
             type: String
+        },
+        payment_status: {
+            type: String,
+            enum: ['unpaid', 'paid', 'canceled', 'refund_processing', 'refunded']
         }
     }
 }, {
