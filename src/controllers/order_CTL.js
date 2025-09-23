@@ -645,7 +645,7 @@ export const updateOrderStatus = async (req, res) => {
 
         // Gửi thông báo tùy theo trạng thái
         let notificationMessage = `Đơn hàng #${order.order_code} của bạn đã chuyển sang trạng thái: ${getStatusText(status)}`;
-        
+
         if (status === 'return_rejected') {
             notificationMessage += `. Lý do: ${reject_reason || 'Không đủ điều kiện hoàn hàng'}`;
         }
@@ -669,7 +669,7 @@ export const updateOrderStatus = async (req, res) => {
 
         for (const admin of adminUsers) {
             let adminMessage = `Đơn hàng #${order.order_code} đã chuyển sang trạng thái: ${getStatusText(status)}`;
-            
+
             if (status === 'return_rejected') {
                 adminMessage += `. Lý do từ chối: ${reject_reason || 'Không đủ điều kiện hoàn hàng'}`;
             }
@@ -756,10 +756,26 @@ export const confirmReceived = async (req, res) => {
     }
 };
 
+const deleteUploadedImages = (filesOrUrls = []) => {
+    filesOrUrls.forEach(item => {
+        let filename = '';
+        if (typeof item === 'string') {
+            filename = item.split('/uploads/')[1];
+        } else if (item?.filename) {
+            filename = item.filename;
+        }
+        const filePath = path.join(__dirname, '../../public/uploads', filename);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+    });
+};
+
 // Khách hàng yêu cầu hoàn hàng
 export const requestReturn = async (req, res) => {
     try {
         if (!req.user || !req.user._id) {
+            if (req.files && req.files.length > 0) deleteUploadedImages(req.files);
             return res.status(401).json({ message: "Vui lòng đăng nhập để tiếp tục" });
         }
 
@@ -767,28 +783,44 @@ export const requestReturn = async (req, res) => {
         const order = await Order_MD.findById(req.params.id);
 
         if (!order) {
+            if (req.files && req.files.length > 0) deleteUploadedImages(req.files);
             return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
         }
 
         // Kiểm tra quyền sở hữu
         if (order.user_id.toString() !== req.user._id.toString()) {
+            if (req.files && req.files.length > 0) deleteUploadedImages(req.files);
             return res.status(403).json({ message: "Bạn không có quyền yêu cầu hoàn hàng này" });
         }
 
         // Chỉ có thể yêu cầu hoàn khi đã giao hàng
         if (order.status !== 'delivered') {
+            if (req.files && req.files.length > 0) deleteUploadedImages(req.files);
             return res.status(400).json({ message: "Chỉ có thể yêu cầu hoàn hàng khi đơn đã được giao" });
         }
 
         // Kiểm tra đã yêu cầu hoàn chưa
-        if (order.status === 'return_requested' || order.status === 'return_accepted' || 
+        if (order.status === 'return_requested' || order.status === 'return_accepted' ||
             order.status === 'return_rejected' || order.status === 'returned') {
+            if (req.files && req.files.length > 0) deleteUploadedImages(req.files);
             return res.status(400).json({ message: "Đơn hàng đã có yêu cầu hoàn hàng" });
         }
 
         // Kiểm tra thời gian (7 ngày từ khi giao - có thể điều chỉnh)
         if (!order.delivered_at) {
+            if (req.files && req.files.length > 0) deleteUploadedImages(req.files);
             return res.status(400).json({ message: "Không thể hoàn hàng vì thiếu thời điểm giao hàng" });
+        }
+
+        let imageUrls = [];
+        if (req.files && req.files.length > 0) {
+            imageUrls = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+        }
+
+        const MAX_IMAGES = 5;
+        if (imageUrls.length > MAX_IMAGES) {
+            if (req.files && req.files.length > 0) deleteUploadedImages(req.files);
+            return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
         }
 
         const sevenDaysMs = 7 * 24 * 60 * 60 * 1000; // 7 ngày
@@ -875,10 +907,10 @@ export const cancelOrder = async (req, res) => {
 
         // Admin có thể hủy đơn ở mọi trạng thái trừ 'delivered', 'returned' và 'canceled'
         // User chỉ có thể hủy đơn ở trạng thái 'pending' và 'processing'
-        const nonCancelableStatus = isAdmin ? 
-            ["delivered", "returned", "canceled", "return_requested", "return_accepted"] : 
+        const nonCancelableStatus = isAdmin ?
+            ["delivered", "returned", "canceled", "return_requested", "return_accepted"] :
             ["shipped", "delivered", "returned", "canceled", "return_requested", "return_accepted", "return_rejected"];
-            
+
         if (nonCancelableStatus.includes(order.status)) {
             return res.status(400).json({
                 message: isAdmin
@@ -1424,7 +1456,7 @@ export const returnOrderByCustomer = async (req, res) => {
 
         // Cập nhật trạng thái đơn hàng
         order.status = 'returned';
-        order.returned_at = new Date(); 
+        order.returned_at = new Date();
         await order.save();
 
         const adminUsers = await User_MD.find({ role: { $in: ['admin', 'employee'] } });

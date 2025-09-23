@@ -3,6 +3,7 @@ import { createOrder, getOrderById, updateOrderStatus, cancelOrder, getAllOrderU
 import authMiddleware from "../middleware/auth_MID";
 import checkRole from "../middleware/checkRole_MID";
 import { ROLES } from "../config/roles";
+import upload from "../middleware/upload_MID";
 
 const orderRouter = Router();
 
@@ -17,5 +18,5 @@ orderRouter.put("/:id/cancel", authMiddleware, cancelOrder);
 orderRouter.put("/:id/return", authMiddleware, returnOrderByCustomer);
 orderRouter.get("/:id/admin", authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), getOrderByIdAdmin);
 orderRouter.put("/:id/confirm-received", authMiddleware, confirmReceived);
-orderRouter.put("/:id/request-return", authMiddleware, requestReturn);
+orderRouter.put("/:id/request-return", authMiddleware, upload.array("images", 5), requestReturn);
 export default orderRouter;
