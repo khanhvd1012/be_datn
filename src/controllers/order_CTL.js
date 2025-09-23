@@ -18,6 +18,12 @@ import {
     getDistricts,
     getWards
 } from "../services/ghnService";
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Lấy tất cả đơn hàng cho admin
 export const getAllOrderAdmin = async (req, res) => {
@@ -838,6 +844,7 @@ export const requestReturn = async (req, res) => {
         order.status = 'return_requested';
         order.return_requested_at = new Date();
         order.return_reason = return_reason || 'Khách hàng yêu cầu hoàn hàng';
+        order.images = imageUrls;
         await order.save();
 
         // Gửi thông báo cho admin
