@@ -10,7 +10,7 @@ const orderSchema = Joi.object({
             'string.pattern.base': 'Số điện thoại không hợp lệ'
         }),
     payment_method: Joi.string()
-        .valid('cod', 'momo', 'vnpay') // bạn có thể sửa theo các phương thức thanh toán của mình
+        .valid('cod', 'zalopay') 
         .required()
         .label('Phương thức thanh toán')
         .messages({
