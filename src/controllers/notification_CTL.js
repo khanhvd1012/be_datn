@@ -7,17 +7,50 @@ export const getAllNotifications = async (req, res) => {
 
         // Lọc thông báo dựa trên role
         if (req.user.role === 'admin' || req.user.role === 'employee') {
-            // Admin và Employee chỉ nhận thông báo tồn kho và đơn hàng mới
-            query.type = { $in: ['low_stock', 'new_order', 'voucher', 'back_in_stock', 'order_status', 'product_new_user', 'product_new_admin', 'voucher_new_user', 'voucher_new_admin', 'out_of_stock', 'contact_new_admin','order_returned'], };
+            // Admin và Employee nhận thông báo tồn kho, đơn hàng mới và các thông báo hoàn hàng
+            query.type = { 
+                $in: [
+                    'low_stock', 
+                    'new_order', 
+                    'voucher', 
+                    'back_in_stock', 
+                    'order_status', 
+                    'product_new_user', 
+                    'product_new_admin', 
+                    'voucher_new_user', 
+                    'voucher_new_admin', 
+                    'out_of_stock', 
+                    'contact_new_admin',
+                    'order_returned',
+                    'return_request',        // Yêu cầu hoàn hàng từ khách hàng
+                    'order_confirmed'        // Khách hàng xác nhận nhận hàng
+                ] 
+            };
         } else {
-            // User thường nhận thêm thông báo trạng thái đơn hàng
-            query.type = { $in: ['voucher', 'back_in_stock', 'order_status', 'product_new_user', 'voucher_new_user', 'out_of_stock','order_returned'] };
+            // User thường nhận thông báo trạng thái đơn hàng và hoàn hàng
+            query.type = { 
+                $in: [
+                    'voucher', 
+                    'back_in_stock', 
+                    'order_status', 
+                    'product_new_user', 
+                    'voucher_new_user', 
+                    'out_of_stock',
+                    'order_returned',
+                    'return_accepted',       // Admin chấp nhận hoàn hàng
+                    'return_rejected'        // Admin từ chối hoàn hàng
+                ] 
+            };
         }
 
         const notifications = await Notification.find(query)
             .sort({ createdAt: -1 })
             .populate('data.product_id', 'name images')
-            .populate('data.variant_id', 'color size price');
+            .populate('data.variant_id', 'color size price')
+            .populate('data.order_id', 'order_code status total_price')
+            .populate('data.customer_id', 'username email')
+            .populate('data.updated_by', 'username email')
+            .populate('data.returned_by', 'username email');
 
         return res.status(200).json({
             message: "Lấy danh sách thông báo thành công",
