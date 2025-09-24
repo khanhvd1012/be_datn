@@ -36,14 +36,6 @@ const voucherSchema = Joi.object({
             'number.max': 'Phần trăm giảm giá không được vượt quá 100%'
         }),
 
-    maxDiscount: Joi.number()
-        .min(0)
-        .allow(null)
-        .messages({
-            'number.base': 'Giảm giá tối đa phải là số',
-            'number.min': 'Giảm giá tối đa không được âm'
-        }),
-
     minOrderValue: Joi.number()
         .min(0)
         .default(0)
@@ -93,11 +85,7 @@ const voucherSchema = Joi.object({
             'number.min': 'Số lượt sử dụng không được âm'
         }),
 
-    isActive: Joi.boolean()
-        .default(true)
-        .messages({
-            'boolean.base': 'Trạng thái phải là true hoặc false'
-        })
+    status: Joi.string().valid('active', 'inactive', 'paused').optional()
 });
 
 /**

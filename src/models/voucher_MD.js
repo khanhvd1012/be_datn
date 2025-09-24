@@ -2,8 +2,8 @@ import mongoose from "mongoose";
 import { updateVoucherOnSave } from "../middleware/voucher_MID.js";
 
 const voucherSchema = new mongoose.Schema({
-    code: { 
-        type: String, 
+    code: {
+        type: String,
         required: true,
         unique: true,
         uppercase: true
@@ -17,11 +17,6 @@ const voucherSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 0
-    },
-    maxDiscount: {
-        type: Number,
-        min: 0,
-        default: null
     },
     minOrderValue: {
         type: Number,
@@ -45,9 +40,10 @@ const voucherSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
-    isActive: {
-        type: Boolean,
-        default: true
+    status: {
+        type: String,
+        enum: ['active', 'inactive', 'paused'],
+        default: 'active'
     }
 }, {
     timestamps: true

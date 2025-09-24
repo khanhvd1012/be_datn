@@ -6,7 +6,8 @@ import mongoose from "mongoose";
  * Các trường thông tin cơ bản:
  * - user_id: Người đặt hàng (reference đến User)
  * - cart_id: Giỏ hàng liên quan (reference đến Cart)
- * - status: Trạng thái đơn hàng (bao gồm các trạng thái hoàn hàng mới)
+ * - status: Trạng thái đơn hàng (bao gồm các trạng thái hoàn hàng)
+ * - payment_status: Trạng thái thanh toán (bao gồm các trạng thái mới)
  * - shipping_address: Địa chỉ giao hàng
  * - payment_method: Phương thức thanh toán
  * - total_price: Tổng giá trị đơn hàng
@@ -16,7 +17,7 @@ import mongoose from "mongoose";
  * - cancelled_at: Thời điểm hủy
  * - cancelled_by: Người hủy đơn (user/admin)
  * 
- * Thông tin hoàn hàng mới:
+ * Thông tin hoàn hàng:
  * - return_reason: Lý do yêu cầu hoàn hàng
  * - return_requested_at: Thời điểm yêu cầu hoàn hàng
  * - return_accepted_at: Thời điểm admin chấp nhận hoàn hàng
@@ -28,10 +29,17 @@ import mongoose from "mongoose";
  * - confirmed_received: Khách hàng đã xác nhận nhận hàng
  * - confirmed_received_at: Thời điểm xác nhận nhận hàng
  * 
+ * Thông tin thanh toán:
+ * - payment_date: Thời điểm thanh toán
+ * - refund_processed_at: Thời điểm bắt đầu xử lý hoàn tiền
+ * - refund_processed_by: Người xử lý hoàn tiền
+ * - refunded_at: Thời điểm hoàn tiền thành công
+ * - refunded_by: Người thực hiện hoàn tiền
+ * 
  * Tính năng:
  * - Tự động tạo createdAt, updatedAt
  * - Virtual fields cho danh sách sản phẩm và labels tiếng Việt
- * - Validate trạng thái đơn hàng với các trạng thái hoàn hàng mới
+ * - Validate trạng thái đơn hàng và thanh toán
  */
 const orderSchema = new mongoose.Schema({
     user_id: {
@@ -64,16 +72,16 @@ const orderSchema = new mongoose.Schema({
         type: String,
         enum: {
             values: [
-                'pending', 
-                'processing', 
-                'shipped', 
-                'delivered', 
-                'return_requested',  // Khách hàng yêu cầu hoàn hàng
-                'return_accepted',   // Admin chấp nhận hoàn hàng
-                'return_rejected',// Admin từ chối hoàn hàng
-                'returned_received',  
-                'returned',          // Hoàn hàng thành công
-                'canceled'
+                'pending',
+                'processing',
+                'shipped',
+                'delivered',
+                'return_requested',
+                'return_accepted',
+                'return_rejected',
+                'returned',
+                'canceled',
+                'returned_received'
             ],
             message: 'Trạng thái {VALUE} không hợp lệ'
         },
@@ -81,28 +89,44 @@ const orderSchema = new mongoose.Schema({
     },
     payment_method: {
         type: String,
-        required: true
-    },
-    // Địa chỉ giao hàng dạng chuỗi: "Họ tên - SĐT - Địa chỉ"
-    shipping_address: {
-        type: String
+        required: true,
+        enum: ['COD', 'ZALOPAY']
     },
     payment_status: {
         type: String,
         enum: {
-            values: ['unpaid', 'paid', 'failed', 'canceled', 'refunded'],
+            values: ['unpaid', 'paid', 'canceled', 'refund_processing', 'refunded'],
             message: 'Trạng thái thanh toán {VALUE} không hợp lệ'
         },
         default: 'unpaid'
     },
-    // Thời điểm giao hàng thành công
+    shipping_address: {
+        type: String,
+        required: true
+    },
+    shipping_fee: {
+        type: Number,
+        default: 0
+    },
+    shipping_service: {
+        type: String,
+        default: null
+    },
+    app_trans_id: {
+        type: String
+    },
+    transaction_id: {
+        type: String
+    },
+    payment_date: {
+        type: Date,
+        default: null
+    },
     delivered_at: {
         type: Date,
         default: null
     },
-    app_trans_id: { type: String, required: true },
-    
-    // ===== THÔNG TIN HỦY ĐŠN =====
+    // Thông tin hủy đơn
     cancel_reason: {
         type: String,
         default: null
@@ -116,8 +140,7 @@ const orderSchema = new mongoose.Schema({
         ref: 'User',
         default: null
     },
-    
-    // ===== THÔNG TIN HOÀN HÀNG MỚI =====
+    // Thông tin hoàn hàng
     return_reason: {
         type: String,
         default: null
@@ -152,8 +175,7 @@ const orderSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
-    
-    // ===== XÁCH NHẬN NHẬN HÀNG =====
+    // Xác nhận nhận hàng
     confirmed_received: {
         type: Boolean,
         default: false
@@ -178,9 +200,6 @@ const orderSchema = new mongoose.Schema({
 
 /**
  * Virtual field để lấy danh sách sản phẩm trong đơn hàng
- * @description
- * - Tự động populate các OrderItem liên quan đến đơn hàng
- * - Sử dụng localField và foreignField để join với collection OrderItem
  */
 orderSchema.virtual('items', {
     ref: 'OrderItem',
@@ -190,17 +209,6 @@ orderSchema.virtual('items', {
 
 /**
  * Virtual field để hiển thị trạng thái đơn hàng bằng tiếng Việt
- * @description
- * Mapping các trạng thái bao gồm cả trạng thái hoàn hàng mới:
- * - pending: Chờ xử lý
- * - processing: Đang xử lý
- * - shipped: Đang giao hàng
- * - delivered: Đã giao hàng
- * - return_requested: Yêu cầu hoàn hàng
- * - return_accepted: Chấp nhận hoàn hàng
- * - return_rejected: Từ chối hoàn hàng
- * - returned: Đã hoàn hàng
- * - canceled: Đã hủy
  */
 orderSchema.virtual('trangThai').get(function () {
     const statusMap = {
@@ -211,17 +219,28 @@ orderSchema.virtual('trangThai').get(function () {
         'return_requested': 'Yêu cầu hoàn hàng',
         'return_accepted': 'Chấp nhận hoàn hàng',
         'return_rejected': 'Từ chối hoàn hàng',
-        'returned': 'Đã hoàn hàng',
+        'returned': 'hoàn hàng',
         'canceled': 'Đã hủy'
     };
     return statusMap[this.status] || this.status;
 });
 
 /**
- * Virtual field mã đơn hàng (10 ký tự đầu của _id)
+ * Virtual field mã đơn hàng
  */
 orderSchema.virtual('order_code').get(function () {
-    return this._id ? this._id.toString().slice(0, 10) : '';
+    return this._id ? `DH${this._id.toString().slice(0, 8).toUpperCase()}` : '';
+});
+
+/**
+ * Tự động tạo order_code trước khi lưu nếu chưa có
+ */
+orderSchema.pre('save', async function (next) {
+    if (!this.order_code) {
+        const count = await this.constructor.countDocuments();
+        this.order_code = `DH${(count + 1).toString().padStart(6, '0')}`;
+    }
+    next();
 });
 
 export default mongoose.model("Order", orderSchema);
