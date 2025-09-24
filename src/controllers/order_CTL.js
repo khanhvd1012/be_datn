@@ -666,6 +666,10 @@ export const updateOrderStatus = async (req, res) => {
             return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
         }
 
+        if (imageUrls.length > 0) {
+            order.return_images = [...order.return_images, ...imageUrls]; 
+        }
+
         await order.save();
 
         // Map trạng thái ra text
