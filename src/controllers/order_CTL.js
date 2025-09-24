@@ -191,7 +191,7 @@ export const createOrder = async (req, res) => {
         if (voucher_code) {
             voucher = await Voucher_MD.findOne({
                 code: voucher_code.toUpperCase(),
-                isActive: true,
+                status: 'active',
                 startDate: { $lte: new Date() },
                 endDate: { $gte: new Date() },
                 $expr: { $lt: ["$usedCount", "$quantity"] },
@@ -1326,7 +1326,7 @@ export const buyNowOrder = async (req, res) => {
         if (voucher_code) {
             voucher = await Voucher_MD.findOne({
                 code: voucher_code.toUpperCase(),
-                isActive: true,
+                status: 'active',
                 startDate: { $lte: new Date() },
                 endDate: { $gte: new Date() },
                 $expr: { $lt: ["$usedCount", "$quantity"] }
