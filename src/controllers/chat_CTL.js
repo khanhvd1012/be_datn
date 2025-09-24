@@ -11,7 +11,6 @@ import mongoose from 'mongoose';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import cron from 'node-cron';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -184,8 +183,6 @@ export const getOneMessageUser = async (req, res) => {
 };
 
 const UPLOAD_DIR = path.join(__dirname, '../../public/uploads');
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-
 // Xóa các file upload thất bại ngay lập tức
 const deleteUploadedFiles = async (filesOrUrls = []) => {
   for (const item of filesOrUrls) {
@@ -208,35 +205,6 @@ const deleteUploadedFiles = async (filesOrUrls = []) => {
     }
   }
 };
-
-// Xóa các ảnh cũ > 7 ngày
-export const deleteOldUploadedImages = async () => {
-  try {
-    const files = await fs.readdir(UPLOAD_DIR);
-
-    for (const file of files) {
-      const filePath = path.join(UPLOAD_DIR, file);
-      const stats = await fs.stat(filePath);
-
-      if (Date.now() - stats.mtimeMs > SEVEN_DAYS_MS) {
-        try {
-          await fs.unlink(filePath);
-          console.log(`Đã xóa file cũ > 7 ngày: ${file}`);
-        } catch (err) {
-          console.error(`Không thể xóa file ${file}:`, err.message);
-        }
-      }
-    }
-  } catch (err) {
-    console.error('Lỗi khi quét thư mục uploads:', err.message);
-  }
-};
-
-// Cron job: chạy mỗi ngày lúc 00:00 để xóa ảnh cũ
-cron.schedule('0 0 * * *', async () => {
-  console.log('Bắt đầu xoá các ảnh cũ > 7 ngày');
-  await deleteOldUploadedImages();
-});
 
 // Endpoint: User gửi tin nhắn vào phòng chat duy nhất
 export const postMessageUser = async (req, res) => {
