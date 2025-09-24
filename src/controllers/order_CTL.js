@@ -501,12 +501,9 @@ export const updateOrderStatus = async (req, res) => {
         const order = await Order_MD.findById(req.params.id);
 
         if (!order) {
-            return res.status(404).json({
-                message: "Không tìm thấy đơn hàng"
-            });
+            return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
         }
 
-        // Thứ tự trạng thái
         const statusOrder = {
             'pending': 0,
             'processing': 1,
@@ -520,28 +517,18 @@ export const updateOrderStatus = async (req, res) => {
             'return_rejected': 9
         };
 
-        // Kiểm tra trạng thái mới
         if (!statusOrder.hasOwnProperty(status)) {
-            return res.status(400).json({
-                message: `Trạng thái không hợp lệ: ${status}`
-            });
+            return res.status(400).json({ message: `Trạng thái không hợp lệ: ${status}` });
         }
 
-        // Không thay đổi nếu đã hủy
         if (order.status === 'canceled') {
-            return res.status(400).json({
-                message: "Không thể thay đổi trạng thái của đơn hàng đã hủy"
-            });
+            return res.status(400).json({ message: "Không thể thay đổi trạng thái của đơn hàng đã hủy" });
         }
 
-        // Không thay đổi nếu đã hoàn hàng thành công
         if (order.status === 'returned') {
-            return res.status(400).json({
-                message: "Đơn hàng đã được hoàn thành công"
-            });
+            return res.status(400).json({ message: "Đơn hàng đã được hoàn thành công" });
         }
 
-        // Các trường hợp chuyển trạng thái đặc biệt
         const allowedTransitions = {
             'delivered': ['return_requested'],
             'return_requested': ['return_accepted', 'return_rejected'],
@@ -550,24 +537,19 @@ export const updateOrderStatus = async (req, res) => {
             'return_rejected': ['return_requested']
         };
 
-        // Kiểm tra chuyển trạng thái hợp lệ
         const currentStatus = order.status;
         const currentOrder = statusOrder[currentStatus];
         const newOrder = statusOrder[status];
 
         if (allowedTransitions[currentStatus] && allowedTransitions[currentStatus].includes(status)) {
-            // Cho phép chuyển trạng thái đặc biệt
+            // Chuyển trạng thái đặc biệt
         } else if (newOrder <= currentOrder && status !== currentStatus) {
-            return res.status(400).json({
-                message: "Không thể chuyển về trạng thái cũ hoặc trạng thái hiện tại"
-            });
+            return res.status(400).json({ message: "Không thể chuyển về trạng thái cũ hoặc trạng thái hiện tại" });
         } else if (newOrder > currentOrder + 1 && !allowedTransitions[currentStatus]?.includes(status)) {
-            return res.status(400).json({
-                message: "Phải chuyển trạng thái tuần tự từng bước"
-            });
+            return res.status(400).json({ message: "Phải chuyển trạng thái tuần tự từng bước" });
         }
 
-        // Trừ kho khi chuyển sang shipped hoặc delivered
+        // Trừ kho khi shipped/delivered
         if ((status === 'shipped' || status === 'delivered') && order.status !== 'shipped') {
             const orderItems = await OrderItem_MD.find({ order_id: order._id });
             for (const item of orderItems) {
@@ -591,7 +573,7 @@ export const updateOrderStatus = async (req, res) => {
             }
         }
 
-        // Cộng lại kho khi chuyển sang returned_received
+        // Cộng kho khi returned_received
         if (status === 'returned_received') {
             const orderItems = await OrderItem_MD.find({ order_id: order._id });
             for (const item of orderItems) {
@@ -614,21 +596,21 @@ export const updateOrderStatus = async (req, res) => {
         }
 
         // Xử lý trạng thái thanh toán
-        if (status === 'canceled' && order.payment_method === 'COD') {
-            order.payment_status = 'canceled';
-        } else if (status === 'canceled' && order.payment_method === 'zalo') {
-            order.payment_status = 'refunded';
+        const paymentMethod = order.payment_method.toLowerCase();
+        if (status === 'canceled') {
+            order.payment_status = paymentMethod === 'cod' ? 'canceled' : (paymentMethod === 'zalopay' ? 'refunded' : order.payment_status);
         } else if (status === 'return_rejected') {
             order.payment_status = 'paid';
-        } else if (status === 'returned' && (order.payment_method === 'COD' || order.payment_method === 'zalo')) {
-            order.payment_status = 'refunded';
+        } else if (status === 'returned') {
+            if (paymentMethod === 'cod' || paymentMethod === 'zalopay') {
+                order.payment_status = 'refunded';
+            }
         }
 
         // Cập nhật trạng thái và thời gian
         order.status = status;
         if (status === 'delivered') {
             order.delivered_at = new Date();
-            // Tự động chuyển sang đã thanh toán sau 3 ngày nếu chưa xác nhận
             setTimeout(async () => {
                 const updatedOrder = await Order_MD.findById(order._id);
                 if (updatedOrder && !updatedOrder.confirmed_received && updatedOrder.status === 'delivered') {
@@ -649,30 +631,26 @@ export const updateOrderStatus = async (req, res) => {
             order.return_reject_reason = reject_reason || 'Không đủ điều kiện hoàn hàng';
         }
 
+        // Xử lý ảnh minh chứng hoàn hàng
         let imageUrls = [];
         if (req.files && req.files.length > 0) {
             imageUrls = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
         }
-
         if (status === 'returned' && imageUrls.length === 0) {
-            return res.status(400).json({
-                message: 'Vui lòng gửi ít nhất 1 ảnh minh chứng để hoàn hàng thành công'
-            });
+            return res.status(400).json({ message: 'Vui lòng gửi ít nhất 1 ảnh minh chứng để hoàn hàng thành công' });
         }
-
         const MAX_IMAGES = 5;
         if (imageUrls.length > MAX_IMAGES) {
             if (req.files && req.files.length > 0) deleteUploadedImages(req.files);
             return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
         }
-
         if (imageUrls.length > 0) {
             order.return_images = [...order.return_images, ...imageUrls]; 
         }
 
         await order.save();
 
-        // Map trạng thái ra text
+        // Thông báo
         function getStatusText(status) {
             const statusMap = {
                 'pending': 'Chờ xử lý',
@@ -689,59 +667,40 @@ export const updateOrderStatus = async (req, res) => {
             return statusMap[status] || status;
         }
 
-        // Gửi thông báo tùy theo trạng thái
         let notificationMessage = `Đơn hàng #${order.order_code} của bạn đã chuyển sang trạng thái: ${getStatusText(status)}`;
-
         if (status === 'return_rejected') {
             notificationMessage += `. Lý do: ${reject_reason || 'Không đủ điều kiện hoàn hàng'}`;
         }
 
-        // Gửi thông báo cho khách hàng
         await Notification.create({
             user_id: order.user_id.toString(),
             title: 'Cập nhật trạng thái đơn hàng',
             message: notificationMessage,
             type: 'order_status',
-            data: {
-                order_id: order._id,
-                status,
-                updated_at: new Date(),
-                reject_reason: status === 'return_rejected' ? reject_reason : null
-            }
+            data: { order_id: order._id, status, updated_at: new Date(), reject_reason: status === 'return_rejected' ? reject_reason : null }
         });
 
-        // Gửi thông báo cho admin/nhân viên
         const adminUsers = await User_MD.find({ role: { $in: ['admin', 'employee'] } });
         for (const admin of adminUsers) {
             let adminMessage = `Đơn hàng #${order.order_code} đã chuyển sang trạng thái: ${getStatusText(status)}`;
-
             if (status === 'return_rejected') {
                 adminMessage += `. Lý do từ chối: ${reject_reason || 'Không đủ điều kiện hoàn hàng'}`;
             }
-
             await Notification.create({
                 user_id: admin._id,
                 title: 'Cập nhật trạng thái đơn hàng',
                 message: adminMessage,
                 type: 'order_status',
-                data: {
-                    order_id: order._id,
-                    status,
-                    updated_by: req.user._id,
-                    customer_id: order.user_id,
-                    reject_reason: status === 'return_rejected' ? reject_reason : null
-                }
+                data: { order_id: order._id, status, updated_by: req.user._id, customer_id: order.user_id, reject_reason: status === 'return_rejected' ? reject_reason : null }
             });
         }
 
         return res.status(200).json(order);
     } catch (error) {
-        return res.status(500).json({
-            message: "Lỗi khi cập nhật trạng thái đơn hàng",
-            error: error.message
-        });
+        return res.status(500).json({ message: "Lỗi khi cập nhật trạng thái đơn hàng", error: error.message });
     }
 };
+
 
 // Khách hàng xác nhận đã nhận hàng
 export const confirmReceived = async (req, res) => {
