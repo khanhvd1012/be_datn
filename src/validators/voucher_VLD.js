@@ -85,11 +85,7 @@ const voucherSchema = Joi.object({
             'number.min': 'Số lượt sử dụng không được âm'
         }),
 
-    isActive: Joi.boolean()
-        .default(true)
-        .messages({
-            'boolean.base': 'Trạng thái phải là true hoặc false'
-        })
+    status: Joi.string().valid('active', 'inactive', 'paused').optional()
 });
 
 /**
