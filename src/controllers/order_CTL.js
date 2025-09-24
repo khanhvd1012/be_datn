@@ -825,8 +825,8 @@ export const updatePaymentStatus = async (req, res) => {
 
             const currentStatus = order.payment_status;
             if (!allowedReversions[currentStatus] || !allowedReversions[currentStatus].includes(payment_status)) {
-                return res.status(400).json({ 
-                    message: `Không thể chuyển trạng thái thanh toán từ '${order.payment_status}' về '${payment_status}'` 
+                return res.status(400).json({
+                    message: `Không thể chuyển trạng thái thanh toán từ '${order.payment_status}' về '${payment_status}'`
                 });
             }
         }
@@ -841,31 +841,31 @@ export const updatePaymentStatus = async (req, res) => {
             // Với ZaloPay, nếu đã thanh toán và đơn hàng bị hủy hoặc hoàn trả
             if (order.payment_status === 'paid' && ['canceled', 'returned_received'].includes(order.status)) {
                 if (!['refund_processing', 'refunded'].includes(payment_status)) {
-                    return res.status(400).json({ 
-                        message: "Đơn hàng ZaloPay đã thanh toán và bị hủy/hoàn trả chỉ được phép cập nhật trạng thái thanh toán thành 'refund_processing' hoặc 'refunded'" 
+                    return res.status(400).json({
+                        message: "Đơn hàng ZaloPay đã thanh toán và bị hủy/hoàn trả chỉ được phép cập nhật trạng thái thanh toán thành 'refund_processing' hoặc 'refunded'"
                     });
                 }
             }
             // Với ZaloPay, nếu chưa thanh toán thì chỉ cho phép chuyển sang 'paid'
             else if (order.payment_status === 'unpaid' && payment_status !== 'paid') {
-                return res.status(400).json({ 
-                    message: "Đơn hàng ZaloPay chưa thanh toán chỉ được phép cập nhật thành 'paid'" 
+                return res.status(400).json({
+                    message: "Đơn hàng ZaloPay chưa thanh toán chỉ được phép cập nhật thành 'paid'"
                 });
             }
         } else {
             // Logic cho các phương thức thanh toán khác (COD, etc.)
-            
+
             // Đặc biệt cho return_rejected - chỉ cho phép chuyển sang 'paid'
             if (order.status === 'return_rejected' && payment_status !== 'paid') {
-                return res.status(400).json({ 
-                    message: "Đơn hàng bị từ chối hoàn hàng chỉ được phép cập nhật trạng thái thanh toán thành 'paid'" 
+                return res.status(400).json({
+                    message: "Đơn hàng bị từ chối hoàn hàng chỉ được phép cập nhật trạng thái thanh toán thành 'paid'"
                 });
             }
 
             // Đặc biệt cho returned_received - chỉ cho phép chuyển sang 'refund_processing' và 'refunded'
             if (order.status === 'returned_received' && !['refund_processing', 'refunded'].includes(payment_status)) {
-                return res.status(400).json({ 
-                    message: "Đơn hàng đã nhận đơn hoàn chỉ được phép cập nhật trạng thái thanh toán thành 'refund_processing' (đang xử lý hoàn tiền) hoặc 'refunded' (đã hoàn tiền)" 
+                return res.status(400).json({
+                    message: "Đơn hàng đã nhận đơn hoàn chỉ được phép cập nhật trạng thái thanh toán thành 'refund_processing' (đang xử lý hoàn tiền) hoặc 'refunded' (đã hoàn tiền)"
                 });
             }
         }
@@ -878,8 +878,8 @@ export const updatePaymentStatus = async (req, res) => {
                 const now = Date.now();
                 const deliveredAtMs = new Date(order.delivered_at).getTime();
                 if (now < deliveredAtMs + threeDaysMs) {
-                    return res.status(400).json({ 
-                        message: "Chỉ có thể cập nhật trạng thái thanh toán sang 'paid' sau 3 ngày kể từ khi giao hàng hoặc khi khách xác nhận nhận hàng" 
+                    return res.status(400).json({
+                        message: "Chỉ có thể cập nhật trạng thái thanh toán sang 'paid' sau 3 ngày kể từ khi giao hàng hoặc khi khách xác nhận nhận hàng"
                     });
                 }
             }
@@ -888,16 +888,16 @@ export const updatePaymentStatus = async (req, res) => {
         // Đặc biệt cho COD: Cho phép chuyển sang 'refund_processing' khi yêu cầu hoàn hàng được chấp nhận
         if (order.payment_method === 'COD' && payment_status === 'refund_processing' && order.status === 'return_accepted') {
             if (!order.return_accepted_at) {
-                return res.status(400).json({ 
-                    message: "Chỉ có thể chuyển sang refund_processing khi yêu cầu hoàn hàng được chấp nhận" 
+                return res.status(400).json({
+                    message: "Chỉ có thể chuyển sang refund_processing khi yêu cầu hoàn hàng được chấp nhận"
                 });
             }
         }
 
         // Đặc biệt cho COD: Chỉ cho phép chuyển sang 'refunded' khi đã nhận hàng hoàn
         if (order.payment_method === 'COD' && payment_status === 'refunded' && order.status !== 'returned_received') {
-            return res.status(400).json({ 
-                message: "Chỉ có thể cập nhật trạng thái thanh toán sang 'refunded' khi đơn hàng đã ở trạng thái đã nhận hàng hoàn" 
+            return res.status(400).json({
+                message: "Chỉ có thể cập nhật trạng thái thanh toán sang 'refunded' khi đơn hàng đã ở trạng thái đã nhận hàng hoàn"
             });
         }
 
@@ -1337,7 +1337,7 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
         embed_data: JSON.stringify(embed_data),
         description: `Thanh toán đơn hàng #${orderId}`,
         bank_code: "",
-        callback_url: "https://65d77257fa61.ngrok-free.app/payment/zalopay/callback",
+        callback_url: "https://e9844df23ae4.ngrok-free.app/payment/zalopay/callback",
     };
 
     const data = `${config.app_id}|${order.app_trans_id}|${order.app_user}|${order.amount}|${order.app_time}|${order.embed_data}|${order.item}`;
@@ -1429,7 +1429,7 @@ export const zaloPayCallback = async (req, res) => {
 
                 // Gửi thông báo cho khách hàng
                 await Notification.create({
-                    user_id: order.user_id.toString(),
+                    user_id: order.user_id._id,
                     title: 'Thanh toán thành công',
                     message: `Đơn hàng #${order.order_code} đã được thanh toán thành công qua ZaloPay`,
                     type: 'payment_status',
@@ -1856,7 +1856,7 @@ export const calculateOrderTotal = async (req, res) => {
         // Tính voucher discount
         let voucher_discount = 0;
         let voucher_info = null;
-        
+
         if (voucher_code) {
             const voucher = await Voucher_MD.findOne({
                 code: voucher_code.toUpperCase(),
@@ -1867,7 +1867,7 @@ export const calculateOrderTotal = async (req, res) => {
             });
 
             if (!voucher) {
-                return res.status(400).json({ 
+                return res.status(400).json({
                     message: "Mã giảm giá không hợp lệ hoặc đã hết",
                     sub_total,
                     voucher_discount: 0,
@@ -1877,7 +1877,7 @@ export const calculateOrderTotal = async (req, res) => {
             }
 
             if (sub_total < voucher.minOrderValue) {
-                return res.status(400).json({ 
+                return res.status(400).json({
                     message: `Đơn tối thiểu để dùng voucher là ${voucher.minOrderValue.toLocaleString()}đ`,
                     sub_total,
                     voucher_discount: 0,
