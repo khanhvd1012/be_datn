@@ -52,7 +52,19 @@ export const getDashboardStats = async (req, res) => {
                 }
             },
             { $unwind: "$order" },
-            { $match: { "order.status": "delivered", "order.payment_status": "paid" } },
+            {
+                $match: {
+                    $or: [
+                        {
+                            "order.status": "delivered",
+                            "order.payment_status": "paid"
+                        },
+                        {
+                            "order.payment_status": "paid"
+                        }
+                    ]
+                }
+            },
             {
                 $group: {
                     _id: "$variant_id", // group theo variant
@@ -140,8 +152,15 @@ export const getDashboardStats = async (req, res) => {
         const revenueAgg = await Order.aggregate([
             {
                 $match: {
-                    status: "delivered",
-                    payment_status: "paid",
+                    $or: [
+                        {
+                            status: "delivered",
+                            payment_status: "paid"
+                        },
+                        {
+                            payment_status: "paid"
+                        }
+                    ],
                     delivered_at: { $gte: start, $lte: end },
                 },
             },
@@ -152,6 +171,61 @@ export const getDashboardStats = async (req, res) => {
                 },
             },
         ]);
+
+        let { startSingle, endSingle } = req.query;
+
+        let start5, end5;
+        if (startSingle && endSingle) {
+            // nếu FE truyền ngày cụ thể
+            start5 = new Date(startSingle);
+            end5 = new Date(endSingle);
+            start5.setHours(0, 0, 0, 0);
+            end5.setHours(23, 59, 59, 999);
+        } else {
+            // mặc định 5 ngày gần nhất
+            const today = new Date();
+            const threeDaysAgo = new Date();
+            threeDaysAgo.setDate(today.getDate() - 4); 
+            start5 = new Date(threeDaysAgo.setHours(0, 0, 0, 0));
+            end5 = new Date(today.setHours(23, 59, 59, 999));
+        }
+
+        const revenueByDayAgg = await Order.aggregate([
+            {
+                $match: {
+                    $or: [
+                        { status: "delivered", payment_status: "paid" },
+                        { payment_status: "paid" }
+                    ],
+                    delivered_at: { $gte: start5, $lte: end5 }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: "%Y-%m-%d", date: "$delivered_at" }
+                    },
+                    revenue: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // Bổ sung các ngày không có đơn để đủ 5 ngày
+        const revenueLast5Days = [];
+        let curDay = new Date(start5);
+        while (curDay <= end5) {
+            const y = curDay.getFullYear();
+            const m = String(curDay.getMonth() + 1).padStart(2, '0');
+            const d = String(curDay.getDate()).padStart(2, '0');
+            const dateStr = `${y}-${m}-${d}`;
+            const found = revenueByDayAgg.find(item => item._id === dateStr);
+            revenueLast5Days.push({
+                date: dateStr,
+                revenue: found ? found.revenue : 0
+            });
+            curDay.setDate(curDay.getDate() + 1);
+        }
 
         let { startYear, endYear } = req.query;
         const currentYear = new Date().getFullYear();
@@ -167,8 +241,15 @@ export const getDashboardStats = async (req, res) => {
         const revenueByYearAgg = await Order.aggregate([
             {
                 $match: {
-                    status: "delivered",
-                    payment_status: "paid",
+                    $or: [
+                        {
+                            status: "delivered",
+                            payment_status: "paid"
+                        },
+                        {
+                            payment_status: "paid"
+                        }
+                    ],
                     delivered_at: {
                         $gte: new Date(`${startYear}-01-01`),
                         $lte: new Date(`${endYear}-12-31`),
@@ -209,7 +290,8 @@ export const getDashboardStats = async (req, res) => {
                 totalUsers,
                 ordersByDate,
                 revenue,
-                revenueByYear
+                revenueByYear,
+                revenueLast5Days      
             }
         });
     } catch (error) {
