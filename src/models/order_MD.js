@@ -192,25 +192,6 @@ const orderSchema = new mongoose.Schema({
         required: true,
         trim: true
     }],
-    // Thông tin hoàn tiền
-    refund_processed_at: {
-        type: Date,
-        default: null
-    },
-    refund_processed_by: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        default: null
-    },
-    refunded_at: {
-        type: Date,
-        default: null
-    },
-    refunded_by: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        default: null
-    }
 }, {
     timestamps: true,
     toJSON: { virtuals: true },
@@ -242,20 +223,6 @@ orderSchema.virtual('trangThai').get(function () {
         'canceled': 'Đã hủy'
     };
     return statusMap[this.status] || this.status;
-});
-
-/**
- * Virtual field để hiển thị trạng thái thanh toán bằng tiếng Việt
- */
-orderSchema.virtual('trangThaiThanhToan').get(function () {
-    const paymentStatusMap = {
-        'unpaid': 'Chưa thanh toán',
-        'paid': 'Đã thanh toán',
-        'canceled': 'Hủy thanh toán',
-        'refund_processing': 'Xử lý hoàn tiền',
-        'refunded': 'Hoàn thanh toán'
-    };
-    return paymentStatusMap[this.payment_status] || this.payment_status;
 });
 
 /**
