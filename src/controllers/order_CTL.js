@@ -802,7 +802,7 @@ export const updatePaymentStatus = async (req, res) => {
 
             const currentStatus = order.payment_status;
             if (!allowedReversions[currentStatus] || !allowedReversions[currentStatus].includes(payment_status)) {
-            return res.status(400).json({
+                return res.status(400).json({
                     message: `Không thể chuyển trạng thái thanh toán từ '${order.payment_status}' về '${payment_status}'`
                 });
             }
@@ -859,8 +859,8 @@ export const updatePaymentStatus = async (req, res) => {
                         message: "Chỉ có thể cập nhật trạng thái thanh toán sang 'paid' sau 3 ngày kể từ khi giao hàng hoặc khi khách xác nhận nhận hàng"
                     });
                 }
-                }
             }
+        }
 
         // Đặc biệt cho COD: Cho phép chuyển sang 'refund_processing' khi yêu cầu hoàn hàng được chấp nhận
         if (order.payment_method === 'COD' && payment_status === 'refund_processing' && order.status === 'return_accepted') {
@@ -873,9 +873,9 @@ export const updatePaymentStatus = async (req, res) => {
 
         // Đặc biệt cho COD: Chỉ cho phép chuyển sang 'refunded' khi đã nhận hàng hoàn
         if (order.payment_method === 'COD' && payment_status === 'refunded' && order.status !== 'returned_received') {
-                        return res.status(400).json({
+            return res.status(400).json({
                 message: "Chỉ có thể cập nhật trạng thái thanh toán sang 'refunded' khi đơn hàng đã ở trạng thái đã nhận hàng hoàn"
-                        });
+            });
         }
 
         // Cập nhật trạng thái thanh toán
@@ -891,6 +891,16 @@ export const updatePaymentStatus = async (req, res) => {
         } else if (payment_status === 'canceled') {
             order.cancelled_at = new Date();
             order.cancelled_by = req.user._id;
+        }
+
+        let imageUrls = [];
+        if (req.files?.length > 0) {
+            imageUrls = req.files.map(file => `http://localhost:3000/uploads/${file.filename}`);
+        }
+        const MAX_IMAGES = 5;
+        if (imageUrls.length > MAX_IMAGES) {
+            if (req.files?.length > 0) deleteUploadedImages(req.files);
+            return res.status(400).json({ message: `Tối đa ${MAX_IMAGES} ảnh` });
         }
 
         await order.save();

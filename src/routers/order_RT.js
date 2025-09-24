@@ -19,6 +19,6 @@ orderRouter.put("/:id/return", authMiddleware, returnOrderByCustomer);
 orderRouter.get("/:id/admin", authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), getOrderByIdAdmin);
 orderRouter.put("/:id/confirm-received", authMiddleware, confirmReceived);
 orderRouter.put("/:id/request-return", authMiddleware, upload.array("images", 5), requestReturn);
-orderRouter.put("/:id/update-payment",authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE),updatePaymentStatus)
-orderRouter.post("/calculate-voucher",authMiddleware,calculateOrderTotal)
+orderRouter.put("/:id/update-payment", authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), upload.array("images", 5), updatePaymentStatus)
+orderRouter.post("/calculate-voucher", authMiddleware, calculateOrderTotal)
 export default orderRouter;
