@@ -3,6 +3,12 @@ import Order from "../models/order_MD";
 import OrderItem from "../models/orderItem_MD";
 import User from "../models/auth_MD";
 
+// Hàm hỗ trợ để lấy tên ngày trong tuần
+function getDayOfWeek(dayIndex) {
+    const days = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+    return days[dayIndex];
+}
+
 export const getDashboardStats = async (req, res) => {
     try {
         const [totalProducts, totalOrders, totalUsers] = await Promise.all([
@@ -52,19 +58,7 @@ export const getDashboardStats = async (req, res) => {
                 }
             },
             { $unwind: "$order" },
-            {
-                $match: {
-                    $or: [
-                        {
-                            "order.status": "delivered",
-                            "order.payment_status": "paid"
-                        },
-                        {
-                            "order.payment_status": "paid"
-                        }
-                    ]
-                }
-            },
+            { $match: { $or: [{ "order.status": "delivered" }, { "order.status": "return_rejected" }, { "order.status": "return_requested" }, { "order.status": "return_accepted" }], "order.payment_status": { $in: ["paid", "unpaid"] } } },
             {
                 $group: {
                     _id: "$variant_id", // group theo variant
@@ -113,7 +107,7 @@ export const getDashboardStats = async (req, res) => {
         } else {
             const today = new Date();
             const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(today.getDate() - 6);
+            sevenDaysAgo.setDate(today.getDate() - 7); // 7 ngày trước (bao gồm cả hôm nay)
             start = new Date(sevenDaysAgo.setHours(0, 0, 0, 0));
             end = new Date(today.setHours(23, 59, 59, 999));
         }
@@ -137,31 +131,108 @@ export const getDashboardStats = async (req, res) => {
         ]);
 
         const ordersByDate = [];
+        let currentDate = new Date(start.getTime());
+        while (currentDate <= end) {
+            const year = currentDate.getFullYear();
+            const month = (currentDate.getMonth() + 1).toString().padStart(2, "0");
+            const day = currentDate.getDate().toString().padStart(2, "0");
+            const dateStr = `${year}-${month}-${day}`;
+            const found = ordersByDateAgg.find((item) => item._id === dateStr);
+            ordersByDate.push({ date: dateStr, orders: found ? found.orders : 0 });
+        
+            currentDate.setDate(currentDate.getDate() + 1); // ✅ dùng đúng biến
+        }
+
+        // --- doanh thu theo ngày (tính delivered, return_rejected, return_requested, return_accepted, trừ khi returned_received) ---
+        const revenueByDateAgg = await Order.aggregate([
+            {
+                $match: {
+                    $or: [
+                        { status: "delivered", delivered_at: { $gte: start, $lte: end } },
+                        { status: "return_rejected", return_rejected_at: { $gte: start, $lte: end } },
+                        { status: "return_requested", return_requested_at: { $gte: start, $lte: end } },
+                        { status: "return_accepted", return_accepted_at: { $gte: start, $lte: end } }
+                    ],
+                    payment_status: { $in: ["paid", "unpaid"] }
+                },
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: "%Y-%m-%d", date: { 
+                            $ifNull: ["$delivered_at", "$return_rejected_at", "$return_requested_at", "$return_accepted_at"] 
+                        } }
+                    },
+                    revenue: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } },
+                    orderCount: { $sum: 1 }
+                },
+            },
+            { $sort: { _id: 1 } },
+        ]);
+
+        // --- trừ doanh thu khi trạng thái là returned_received theo ngày ---
+        const refundByDateAgg = await Order.aggregate([
+            {
+                $match: {
+                    status: "returned_received",
+                    return_received_at: { $gte: start, $lte: end },
+                    payment_status: { $in: ["refunded", "unpaid"] }
+                },
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: "%Y-%m-%d", date: "$return_received_at" }
+                    },
+                    refund: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } },
+                    refundCount: { $sum: 1 }
+                },
+            },
+            { $sort: { _id: 1 } },
+        ]);
+
+        // Tạo bảng doanh thu theo ngày
+        const dailyRevenue = [];
         let cur = new Date(start.getTime());
         while (cur <= end) {
             const year = cur.getFullYear();
             const month = (cur.getMonth() + 1).toString().padStart(2, "0");
             const day = cur.getDate().toString().padStart(2, "0");
             const dateStr = `${year}-${month}-${day}`;
-            const found = ordersByDateAgg.find((item) => item._id === dateStr);
-            ordersByDate.push({ date: dateStr, orders: found ? found.orders : 0 });
+            const formattedDate = `${day}/${month}/${year}`; // Định dạng ngày dd/mm/yyyy
+
+            const revenueItem = revenueByDateAgg.find((item) => item._id === dateStr);
+            const refundItem = refundByDateAgg.find((item) => item._id === dateStr);
+
+            dailyRevenue.push({
+                date: formattedDate,
+                dayOfWeek: getDayOfWeek(cur.getDay()),
+                revenue: revenueItem ? revenueItem.revenue : 0,
+                refund: refundItem ? refundItem.refund : 0,
+                netRevenue: (revenueItem ? revenueItem.revenue : 0) - (refundItem ? refundItem.refund : 0),
+                orderCount: revenueItem ? revenueItem.orderCount : 0,
+                refundCount: refundItem ? refundItem.refundCount : 0
+            });
+
             cur.setDate(cur.getDate() + 1);
         }
 
-        // --- doanh thu theo khoảng ngày ---
+        // Tính tổng doanh thu, hoàn lại, và net revenue
+        const totalRevenue = dailyRevenue.reduce((sum, day) => sum + day.revenue, 0);
+        const totalRefund = dailyRevenue.reduce((sum, day) => sum + day.refund, 0);
+        const totalNetRevenue = dailyRevenue.reduce((sum, day) => sum + day.netRevenue, 0);
+
+        // --- doanh thu theo khoảng ngày (tổng hợp) ---
         const revenueAgg = await Order.aggregate([
             {
                 $match: {
                     $or: [
-                        {
-                            status: "delivered",
-                            payment_status: "paid"
-                        },
-                        {
-                            payment_status: "paid"
-                        }
+                        { status: "delivered", delivered_at: { $gte: start, $lte: end } },
+                        { status: "return_rejected", return_rejected_at: { $gte: start, $lte: end } },
+                        { status: "return_requested", return_requested_at: { $gte: start, $lte: end } },
+                        { status: "return_accepted", return_accepted_at: { $gte: start, $lte: end } }
                     ],
-                    delivered_at: { $gte: start, $lte: end },
+                    payment_status: { $in: ["paid", "unpaid"] }
                 },
             },
             {
@@ -172,60 +243,22 @@ export const getDashboardStats = async (req, res) => {
             },
         ]);
 
-        let { startSingle, endSingle } = req.query;
-
-        let start5, end5;
-        if (startSingle && endSingle) {
-            // nếu FE truyền ngày cụ thể
-            start5 = new Date(startSingle);
-            end5 = new Date(endSingle);
-            start5.setHours(0, 0, 0, 0);
-            end5.setHours(23, 59, 59, 999);
-        } else {
-            // mặc định 5 ngày gần nhất
-            const today = new Date();
-            const threeDaysAgo = new Date();
-            threeDaysAgo.setDate(today.getDate() - 4); 
-            start5 = new Date(threeDaysAgo.setHours(0, 0, 0, 0));
-            end5 = new Date(today.setHours(23, 59, 59, 999));
-        }
-
-        const revenueByDayAgg = await Order.aggregate([
+        // --- trừ doanh thu khi trạng thái là returned_received (tổng hợp) ---
+        const refundAgg = await Order.aggregate([
             {
                 $match: {
-                    $or: [
-                        { status: "delivered", payment_status: "paid" },
-                        { payment_status: "paid" }
-                    ],
-                    delivered_at: { $gte: start5, $lte: end5 }
-                }
+                    status: "returned_received",
+                    return_received_at: { $gte: start, $lte: end },
+                    payment_status: { $in: ["refunded", "unpaid"] }
+                },
             },
             {
                 $group: {
-                    _id: {
-                        $dateToString: { format: "%Y-%m-%d", date: "$delivered_at" }
-                    },
-                    revenue: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } }
-                }
+                    _id: null,
+                    refund: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } },
+                },
             },
-            { $sort: { _id: 1 } }
         ]);
-
-        // Bổ sung các ngày không có đơn để đủ 5 ngày
-        const revenueLast5Days = [];
-        let curDay = new Date(start5);
-        while (curDay <= end5) {
-            const y = curDay.getFullYear();
-            const m = String(curDay.getMonth() + 1).padStart(2, '0');
-            const d = String(curDay.getDate()).padStart(2, '0');
-            const dateStr = `${y}-${m}-${d}`;
-            const found = revenueByDayAgg.find(item => item._id === dateStr);
-            revenueLast5Days.push({
-                date: dateStr,
-                revenue: found ? found.revenue : 0
-            });
-            curDay.setDate(curDay.getDate() + 1);
-        }
 
         let { startYear, endYear } = req.query;
         const currentYear = new Date().getFullYear();
@@ -238,27 +271,22 @@ export const getDashboardStats = async (req, res) => {
             endYear = parseInt(endYear, 10);
         }
 
+        // --- doanh thu theo năm (tính delivered, return_rejected, return_requested, return_accepted, trừ khi returned_received) ---
         const revenueByYearAgg = await Order.aggregate([
             {
                 $match: {
                     $or: [
-                        {
-                            status: "delivered",
-                            payment_status: "paid"
-                        },
-                        {
-                            payment_status: "paid"
-                        }
+                        { status: "delivered", delivered_at: { $gte: new Date(`${startYear}-01-01`), $lte: new Date(`${endYear}-12-31`) } },
+                        { status: "return_rejected", return_rejected_at: { $gte: new Date(`${startYear}-01-01`), $lte: new Date(`${endYear}-12-31`) } },
+                        { status: "return_requested", return_requested_at: { $gte: new Date(`${startYear}-01-01`), $lte: new Date(`${endYear}-12-31`) } },
+                        { status: "return_accepted", return_accepted_at: { $gte: new Date(`${startYear}-01-01`), $lte: new Date(`${endYear}-12-31`) } }
                     ],
-                    delivered_at: {
-                        $gte: new Date(`${startYear}-01-01`),
-                        $lte: new Date(`${endYear}-12-31`),
-                    },
+                    payment_status: { $in: ["paid", "unpaid"] }
                 },
             },
             {
                 $group: {
-                    _id: { $year: "$delivered_at" },
+                    _id: { $year: { $ifNull: ["$delivered_at", "$return_rejected_at", "$return_requested_at", "$return_accepted_at"] } },
                     revenue: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } },
                 },
             },
@@ -272,13 +300,42 @@ export const getDashboardStats = async (req, res) => {
             },
         ]);
 
+        // --- trừ doanh thu theo năm khi trạng thái là returned_received ---
+        const refundByYearAgg = await Order.aggregate([
+            {
+                $match: {
+                    status: "returned_received",
+                    return_received_at: { $gte: new Date(`${startYear}-01-01`), $lte: new Date(`${endYear}-12-31`) },
+                    payment_status: { $in: ["refunded", "unpaid"] }
+                },
+            },
+            {
+                $group: {
+                    _id: { $year: "$return_received_at" },
+                    refund: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } },
+                },
+            },
+            { $sort: { _id: 1 } },
+            {
+                $project: {
+                    year: "$_id",
+                    refund: 1,
+                    _id: 0,
+                },
+            },
+        ]);
+
         const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
         const revenueByYear = years.map((year) => {
-            const found = revenueByYearAgg.find((item) => item.year === year);
-            return found || { year, revenue: 0 };
+            const revenueItem = revenueByYearAgg.find((item) => item.year === year) || { year, revenue: 0 };
+            const refundItem = refundByYearAgg.find((item) => item.year === year) || { year, refund: 0 };
+            return {
+                year: revenueItem.year,
+                revenue: revenueItem.revenue - refundItem.refund
+            };
         });
 
-        const revenue = revenueAgg[0]?.revenue || 0;
+        const revenue = (revenueAgg[0]?.revenue || 0) - (refundAgg[0]?.refund || 0);
 
         res.json({
             success: true,
@@ -289,9 +346,14 @@ export const getDashboardStats = async (req, res) => {
                 totalOrders,
                 totalUsers,
                 ordersByDate,
+                dailyRevenue,
                 revenue,
                 revenueByYear,
-                revenueLast5Days      
+                summary: {
+                    totalRevenue,
+                    totalRefund,
+                    totalNetRevenue
+                }
             }
         });
     } catch (error) {
