@@ -7,6 +7,8 @@ import size_MD from '../models/size_MD.js';
 import Colors_MD from '../models/color_MD.js';
 import stock_MD from '../models/stock_MD.js';
 import Variant_MD from '../models/variant_MD.js';
+import Voucher_MD from '../models/voucher_MD.js';
+import Brand_MD from '../models/brand_MD.js'; // Import model Brand
 import mongoose from 'mongoose';
 import fs from 'fs/promises';
 import path from 'path';
@@ -33,16 +35,19 @@ const askGeminiWithTimeout = async (userMessage, context, timeoutMs = 8000) => {
   }
 };
 
-// Chuẩn hóa và trích xuất size và màu sắc
-const extractSizeAndColor = (content) => {
-  if (!content || typeof content !== 'string') return { size: null, color: null };
+// Chuẩn hóa và trích xuất size, màu sắc và thương hiệu
+const extractSizeAndColorBrand = (content) => {
+  if (!content || typeof content !== 'string') return { size: null, color: null, brand: null };
   const sizePattern = new RegExp('(?:size|cỡ|chân(?: của)?\\s*tôi(?:\\s*size)?)\\s*[:\\-\\s]*([0-9]{1,3}(?:[\\.,][0-9]+)?)', 'iu');
   const colorPattern = new RegExp('màu\\s*([\\p{L}\\s\\-]+)', 'iu');
+  const brandPattern = new RegExp('thương hiệu\\s*([\\p{L}\\s\\-]+)|(?:của\\s*)?([\\p{L}\\s\\-]+)(?:\\s*brand)', 'iu');
   const sizeMatch = content.match(sizePattern);
   const colorMatch = content.match(colorPattern);
+  const brandMatch = content.match(brandPattern);
   const sizeNum = sizeMatch ? sizeMatch[1].replace(',', '.') : null;
   const colorText = colorMatch ? colorMatch[1].trim() : null;
-  return { size: sizeNum, color: colorText };
+  const brandText = brandMatch ? (brandMatch[1] || brandMatch[2] || '').trim() : null;
+  return { size: sizeNum, color: colorText, brand: brandText };
 };
 
 // Tạo hoặc lấy bot user
@@ -66,7 +71,6 @@ const getOrCreateBotUser = async () => {
   return aiUser;
 };
 
-// Endpoint: User xem lịch sử trò chuyện của họ
 export const getMessageUser = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -258,7 +262,6 @@ export const postMessageUser = async (req, res) => {
 
     await ChatRoom.findByIdAndUpdate(chatRoom._id, { $set: { lastMessage: customerMessage._id } });
 
-
     let aiReply = null;
     let aiShouldReply = !chatRoom.isEmployeeJoined;
     if (chatRoom.isEmployeeJoined && chatRoom.lastEmployeeMessageAt) {
@@ -268,27 +271,70 @@ export const postMessageUser = async (req, res) => {
 
     if (aiShouldReply) {
       const user = await User.findById(userId);
-      const contextMessage = content;
-      const { size: sizeNum, color: colorText } = extractSizeAndColor(content);
+      const contextMessage = content.toLowerCase(); // Chuẩn hóa để so sánh
 
-      let variants = [];
-      let context = '';
+      // Kiểm tra nếu tin nhắn chứa hình ảnh
+      if (imageUrls.length > 0) {
+        aiReply = "Vui lòng đợi admin tham gia để hỗ trợ bạn.";
+      }
+      // Kiểm tra nếu khách hàng hỏi về voucher
+      else if (/voucher|mã giảm giá|ưu đãi|khuyến mãi|giảm giá/i.test(contextMessage)) {
+        const now = new Date();
+        const activeVouchers = await Voucher_MD.find({
+          status: 'active',
+          startDate: { $lte: now },
+          endDate: { $gte: now },
+          $expr: { $lt: ["$usedCount", "$quantity"] },
+        }).lean();
 
-      if (sizeNum) {
-        const numericSize = Number(sizeNum);
-        const sizeDoc = await size_MD.findOne({ size: numericSize }).lean();
-        if (sizeDoc) {
-          const variantQuery = { size: sizeDoc._id };
+        if (activeVouchers.length > 0) {
+          aiReply = "Danh sách các voucher hiện có:\n" +
+            activeVouchers.map(v => 
+              `- Mã: ${v.code} | Loại: ${v.type === 'percentage' ? `${v.value}%` : `${v.value.toLocaleString()}đ`} | Giá trị tối thiểu: ${v.minOrderValue.toLocaleString()}đ | Hết hạn: ${v.endDate.toLocaleDateString('vi-VN')}`
+            ).join('\n') +
+            "\nVui lòng nhập mã voucher khi thanh toán để áp dụng!";
+        } else {
+          aiReply = "Hiện tại không có voucher nào đang hoạt động. Vui lòng quay lại sau!";
+        }
+      }
+      // Xử lý các câu hỏi khác (size, màu sắc, thương hiệu, sản phẩm)
+      else {
+        const { size: sizeNum, color: colorText, brand: brandText } = extractSizeAndColorBrand(content);
+
+        let variants = [];
+        let context = '';
+
+        if (sizeNum || colorText || brandText) {
+          const variantQuery = {};
+          if (sizeNum) {
+            const numericSize = Number(sizeNum);
+            const sizeDoc = await size_MD.findOne({ size: numericSize }).lean();
+            if (sizeDoc) variantQuery.size = sizeDoc._id;
+            else context += `Không tìm thấy size ${sizeNum} trong hệ thống. `;
+          }
           if (colorText) {
             const colorDoc = await Colors_MD.findOne({ name: new RegExp(colorText, 'iu') }).lean();
             if (colorDoc) variantQuery.color = colorDoc._id;
+            else context += `Không tìm thấy màu ${colorText} trong hệ thống. `;
           }
-          variants = await Variant_MD.find(variantQuery)
-            .limit(10)
-            .populate({ path: 'product_id', select: 'name brand category' })
-            .populate({ path: 'size', select: 'size' })
-            .populate({ path: 'color', select: 'name' })
-            .lean();
+          if (brandText) {
+            const brandDoc = await Brand_MD.findOne({ name: new RegExp(brandText, 'iu') }).lean();
+            if (brandDoc) {
+              variants = await Variant_MD.find({ ...variantQuery, 'product_id.brand': brandDoc._id })
+                .limit(10)
+                .populate({ path: 'product_id', select: 'name brand category' })
+                .populate({ path: 'size', select: 'size' })
+                .populate({ path: 'color', select: 'name' })
+                .lean();
+            } else context += `Không tìm thấy thương hiệu ${brandText} trong hệ thống. `;
+          } else {
+            variants = await Variant_MD.find(variantQuery)
+              .limit(10)
+              .populate({ path: 'product_id', select: 'name brand category' })
+              .populate({ path: 'size', select: 'size' })
+              .populate({ path: 'color', select: 'name' })
+              .lean();
+          }
 
           if (variants.length > 0) {
             const stockPromises = variants.map((v) => stock_MD.findOne({ product_variant_id: v._id }).lean());
@@ -297,69 +343,68 @@ export const postMessageUser = async (req, res) => {
               v.stockInfo = stocks[i] ? stocks[i].quantity : 0;
             });
 
-            context = `Các sản phẩm phù hợp với size ${sizeNum}${colorText ? ` màu ${colorText}` : ''}:\n` +
+            context += `Các sản phẩm phù hợp${sizeNum ? ` với size ${sizeNum}` : ''}${colorText ? ` màu ${colorText}` : ''}${brandText ? ` của thương hiệu ${brandText}` : ''}:\n` +
               variants.map((v) => {
                 const sizeText = Array.isArray(v.size) ? v.size.map((s) => s.size).join(', ') : v.size?.size ?? 'N/A';
-                return `Tên: ${v.product_id?.name || 'N/A'} | Giá: ${v.price ?? 'N/A'} | Màu: ${v.color?.name || 'N/A'} | Size: ${sizeText} | Tồn kho: ${v.stockInfo ?? 'Không rõ'} | Thương hiệu: ${v.product_id?.brand?.name || 'N/A'} | Danh mục: ${v.product_id?.category?.name || 'N/A'}`;
+                const brandName = v.product_id?.brand?.name || 'N/A';
+                return `Tên: ${v.product_id?.name || 'N/A'} | Giá: ${v.price ?? 'N/A'} | Màu: ${v.color?.name || 'N/A'} | Size: ${sizeText} | Tồn kho: ${v.stockInfo ?? 'Không rõ'} | Thương hiệu: ${brandName} | Danh mục: ${v.product_id?.category?.name || 'N/A'}`;
               }).join('\n');
           } else {
-            context = `Không tìm thấy sản phẩm nào phù hợp với size ${sizeNum}${colorText ? ` màu ${colorText}` : ''}.`;
+            context += `Không tìm thấy sản phẩm nào phù hợp${sizeNum ? ` với size ${sizeNum}` : ''}${colorText ? ` màu ${colorText}` : ''}${brandText ? ` của thương hiệu ${brandText}` : ''}.`;
           }
-        } else {
-          context = `Không tìm thấy size ${sizeNum} trong hệ thống.`;
-        }
-      } else if (/giày|sản phẩm|tư vấn|phù hợp|mẫu|mua|đặt/i.test(contextMessage)) {
-        variants = await Variant_MD.find()
-          .limit(10)
-          .populate({ path: 'product_id', select: 'name brand category' })
-          .populate({ path: 'size', select: 'size' })
-          .populate({ path: 'color', select: 'name' })
-          .lean();
+        } else if (/giày|sản phẩm|tư vấn|phù hợp|mẫu|mua|đặt/i.test(contextMessage)) {
+          variants = await Variant_MD.find()
+            .limit(10)
+            .populate({ path: 'product_id', select: 'name brand category' })
+            .populate({ path: 'size', select: 'size' })
+            .populate({ path: 'color', select: 'name' })
+            .lean();
 
-        const stockPromises = variants.map((v) => stock_MD.findOne({ product_variant_id: v._id }).lean());
-        const stocks = await Promise.all(stockPromises);
-        variants.forEach((v, i) => {
-          v.stockInfo = stocks[i] ? stocks[i].quantity : 0;
+          const stockPromises = variants.map((v) => stock_MD.findOne({ product_variant_id: v._id }).lean());
+          const stocks = await Promise.all(stockPromises);
+          variants.forEach((v, i) => {
+            v.stockInfo = stocks[i] ? stocks[i].quantity : 0;
+          });
+
+          context = 'Một số sản phẩm nổi bật:\n' +
+            variants.map((v) => `- ${v.product_id?.name || 'N/A'} (${v.product_id?.brand?.name || 'N/A'}) - Size: ${v.size?.size || 'N/A'} - Màu: ${v.color?.name || 'N/A'} - Giá: ${v.price ?? 'N/A'}`).join('\n');
+        }
+
+        const productDetails = variants.length > 0
+          ? variants.map((v) => [
+            `Tên: ${v.product_id?.name || 'N/A'}`,
+            `Giá: ${v.price ?? 'N/A'}`,
+            `Màu: ${v.color?.name || 'N/A'}`,
+            `Size: ${Array.isArray(v.size) ? v.size.map((s) => s.size).join(', ') : v.size?.size ?? 'N/A'}`,
+            `Tồn kho: ${v.stockInfo ?? 'Không rõ'}`,
+            `Thương hiệu: ${v.product_id?.brand?.name || 'N/A'}`,
+            `Danh mục: ${v.product_id?.category?.name || 'N/A'}`,
+          ].join(' | ')).join('\n')
+          : '';
+
+        const fullContext = (context ? context + '\n' : '') + (productDetails ? `Chi tiết sản phẩm:\n${productDetails}` : '');
+        aiReply = await askGeminiWithTimeout(contextMessage, fullContext, 8000);
+        if (aiReply.includes('bot gặp sự cố')) {
+          aiReply = await askGeminiWithTimeout(contextMessage, fullContext, 8000);
+        }
+      }
+
+      if (aiReply) {
+        const aiUser = await getOrCreateBotUser();
+        if (!aiUser || !aiUser._id) {
+          return res.status(500).json({ message: 'Lỗi hệ thống AI' });
+        }
+
+        const aiMessage = await Message.create({
+          chatRoom_id: chatRoom._id,
+          sender_id: aiUser._id,
+          receiver_id: userId,
+          content: aiReply,
+          type: 'text',
         });
 
-        context = 'Một số sản phẩm nổi bật:\n' +
-          variants.map((v) => `- ${v.product_id?.name || 'N/A'} (${v.product_id?.brand?.name || 'N/A'}) - Size: ${v.size?.size || 'N/A'} - Màu: ${v.color?.name || 'N/A'} - Giá: ${v.price ?? 'N/A'}`).join('\n');
+        await ChatRoom.findByIdAndUpdate(chatRoom._id, { $set: { lastMessage: aiMessage._id } });
       }
-
-      const productDetails = variants.length > 0
-        ? variants.map((v) => [
-          `Tên: ${v.product_id?.name || 'N/A'}`,
-          `Giá: ${v.price ?? 'N/A'}`,
-          `Màu: ${v.color?.name || 'N/A'}`,
-          `Size: ${Array.isArray(v.size) ? v.size.map((s) => s.size).join(', ') : v.size?.size ?? 'N/A'}`,
-          `Tồn kho: ${v.stockInfo ?? 'Không rõ'}`,
-          `Thương hiệu: ${v.product_id?.brand?.name || 'N/A'}`,
-          `Danh mục: ${v.product_id?.category?.name || 'N/A'}`,
-        ].join(' | ')).join('\n')
-        : '';
-
-      const fullContext = (context ? context + '\n' : '') + (productDetails ? `Chi tiết sản phẩm:\n${productDetails}` : '');
-
-      aiReply = await askGeminiWithTimeout(contextMessage, fullContext, 8000);
-      if (aiReply.includes('bot gặp sự cố')) {
-        aiReply = await askGeminiWithTimeout(contextMessage, fullContext, 8000);
-      }
-
-      const aiUser = await getOrCreateBotUser();
-      if (!aiUser || !aiUser._id) {
-        return res.status(500).json({ message: 'Lỗi hệ thống AI' });
-      }
-
-      const aiMessage = await Message.create({
-        chatRoom_id: chatRoom._id,
-        sender_id: aiUser._id,
-        receiver_id: userId,
-        content: aiReply,
-        type: 'text',
-      });
-
-      await ChatRoom.findByIdAndUpdate(chatRoom._id, { $set: { lastMessage: aiMessage._id } });
-
     }
 
     const messages = await Message.find({ chatRoom_id: chatRoom._id })
@@ -368,12 +413,13 @@ export const postMessageUser = async (req, res) => {
       .lean();
 
     return res.status(200).json({
-      message: 'Tin nhắn đã được gửi và AI đã trả lời',
+      message: 'Tin nhắn đã được gửi' + (aiReply ? ' và AI đã trả lời' : ''),
       aiReply,
       chatHistory: messages,
     });
   } catch (error) {
     console.error('Lỗi postMessageUser:', error);
+    if (req.files?.length) await deleteUploadedFiles(req.files);
     return res.status(500).json({ message: 'Lỗi khi gửi tin nhắn', error: error.message });
   }
 };

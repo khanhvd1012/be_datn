@@ -952,8 +952,7 @@ export const cancelOrder = async (req, res) => {
             return res.status(403).json({ message: "Bạn không có quyền hủy đơn hàng này" });
         }
 
-        // Admin có thể hủy đơn ở mọi trạng thái trừ 'delivered', 'returned' và 'canceled'
-        // User chỉ có thể hủy đơn ở trạng thái 'pending' và 'processing'
+        // Các trạng thái không thể hủy
         const nonCancelableStatus = isAdmin ?
             ["delivered", "returned", "canceled", "return_requested", "return_accepted"] :
             ["shipped", "delivered", "returned", "canceled", "return_requested", "return_accepted", "return_rejected"];
@@ -965,9 +964,6 @@ export const cancelOrder = async (req, res) => {
                     : "Không thể hủy đơn hàng trong trạng thái hiện tại"
             });
         }
-
-        // Kiểm tra lý do hủy bắt buộc khi admin hủy đơn
-
 
         // Hoàn lại số lượng cho kho nếu đơn hàng đã shipped
         if (order.status === 'shipped' && isAdmin) {
@@ -981,7 +977,6 @@ export const cancelOrder = async (req, res) => {
                 );
 
                 if (stock) {
-                    // Tạo lịch sử tồn kho khi admin hủy
                     await StockHistory_MD.create({
                         stock_id: stock._id,
                         quantity_change: item.quantity,
@@ -990,7 +985,6 @@ export const cancelOrder = async (req, res) => {
                         note: `Admin ${req.user.username} đã hủy đơn hàng đang giao`
                     });
 
-                    // Kiểm tra và cập nhật trạng thái variant
                     if (stock.quantity > 0) {
                         await Variant_MD.findByIdAndUpdate(
                             item.variant_id,
@@ -1001,11 +995,14 @@ export const cancelOrder = async (req, res) => {
             }
         }
 
-        // Cập nhật trạng thái thanh toán dựa trên phương thức thanh toán
-        if (order.payment_method === 'COD') {
-            order.payment_status = 'canceled';
-        } else if (order.payment_method === 'zalo') {
-            order.payment_status = 'refunded';
+        // Cập nhật trạng thái thanh toán dựa trên phương thức thanh toán, chỉ nếu chưa hủy
+        if (order.status !== 'canceled') {
+            const paymentMethod = order.payment_method.toLowerCase();
+            if (paymentMethod === 'cod') {
+                order.payment_status = 'canceled';
+            } else if (paymentMethod === 'zalopay') {
+                order.payment_status = 'refunded';
+            }
         }
 
         // Cập nhật thông tin hủy đơn
@@ -1092,7 +1089,7 @@ export const createZaloPayPayment = async (amount, orderId, userId, app_trans_id
         embed_data: JSON.stringify(embed_data),
         description: `Thanh toán đơn hàng #${orderId}`,
         bank_code: "",
-        callback_url: "https://65d77257fa61.ngrok-free.app/payment/zalopay/callback",
+        callback_url: "https://varus-shanita-parentally.ngrok-free.dev/payment/zalopay/callback",
     };
 
     const data = `${config.app_id}|${order.app_trans_id}|${order.app_user}|${order.amount}|${order.app_time}|${order.embed_data}|${order.item}`;
