@@ -108,11 +108,20 @@ const sendVoucherNotificationToAllUsers = async (voucher) => {
  */
 export const createVoucher = async (req, res) => {
     try {
+        const { code, type, minOrderValue, value } = req.body;
+
         // Kiểm tra xem voucher đã tồn tại chưa
-        const existingVoucher = await Voucher_MD.findOne({ code: req.body.code });
+        const existingVoucher = await Voucher_MD.findOne({ code });
         if (existingVoucher) {
             return res.status(400).json({
                 message: "Voucher đã tồn tại",
+            });
+        }
+
+        //Ràng buộc: Đơn hàng tối thiểu phải > giá trị giảm
+        if (type === 'fixed' && minOrderValue <= value) {
+            return res.status(400).json({
+                message: "Giá trị đơn hàng tối thiểu phải lớn hơn giá trị giảm."
             });
         }
 
@@ -124,7 +133,7 @@ export const createVoucher = async (req, res) => {
             await sendVoucherNotificationToAdmins(voucher);
         });
 
-        // Lên lịch gửi thông báo cho user sau 1 giờ (3600000 milliseconds)
+        if (voucher.status === 'active') {
         const timeoutId = setTimeout(async () => {
             try {
                 await sendVoucherNotificationToAllUsers(voucher);
@@ -132,9 +141,10 @@ export const createVoucher = async (req, res) => {
             } catch (error) {
                 console.error('[SCHEDULED] Lỗi khi gửi thông báo voucher cho user:', error);
             }
-        }, 36000); // ✅ đúng 1 giờ
+        }, 3600000); 
         
         setVoucherTimeout(voucher._id, timeoutId);
+        }
 
         return res.status(201).json({
             message: "Tạo voucher thành công. Admin đã được thông báo ngay lập tức. Thông báo sẽ được gửi cho khách hàng sau 1 giờ.",
@@ -196,17 +206,35 @@ export const getOneVoucher = async (req, res) => {
  */
 export const updateVoucher = async (req, res) => {
     try {
+        const { usedCount, quantity, status, endDate } = req.body;
+
         // Kiểm tra usedCount không vượt quá quantity
-        if (req.body.usedCount && req.body.quantity && req.body.usedCount > req.body.quantity) {
+        if (
+            (usedCount !== undefined || quantity !== undefined) &&
+            (usedCount ?? 0) > (quantity ?? 0)
+        ) {
             return res.status(400).json({
                 message: "Số lượng đã sử dụng không được vượt quá tổng số lượng"
             });
         }
 
+        // Validate status nếu được gửi lên
+        if (status && !['active', 'inactive', 'paused'].includes(status)) {
+            return res.status(400).json({
+                message: "Trạng thái không hợp lệ. Chỉ chấp nhận: active, inactive, paused."
+            });
+        }
+
+        // Nếu endDate mới đã qua hiện tại -> ép status = 'inactive'
+        if (endDate && new Date(endDate) < new Date()) {
+            req.body.status = 'inactive';
+        }
+
+        // Cập nhật voucher
         const voucher = await Voucher_MD.findByIdAndUpdate(
             req.params.id,
             req.body,
-            { new: true }
+            { new: true, runValidators: true }
         );
 
         if (!voucher) {
@@ -233,16 +261,40 @@ export const updateVoucher = async (req, res) => {
  */
 export const deleteVoucher = async (req, res) => {
     try {
-        const voucher = await Voucher_MD.findByIdAndDelete(req.params.id);
+        const voucher = await Voucher_MD.findById(req.params.id);
 
         if (!voucher) {
             return res.status(404).json({ message: "Không tìm thấy voucher" });
         }
 
-        // Xóa timeout cho voucher
+        // Nếu voucher đã có lượt dùng -> không xóa, chỉ chuyển trạng thái sang paused
+        if (voucher.usedCount > 0) {
+            // Nếu đã paused rồi thì chỉ trả về thông báo
+            if (voucher.status === 'paused') {
+                return res.status(400).json({
+                    message: "Voucher đã có lượt sử dụng và hiện đang ở trạng thái tạm dừng. Không thể xóa."
+                });
+            }
+
+            voucher.status = 'paused';
+            await voucher.save();
+
+            return res.status(200).json({
+                message: "Voucher đã có lượt sử dụng. Đã chuyển sang trạng thái tạm dừng.",
+                data: voucher
+            });
+        }
+
+        // Nếu chưa có lượt dùng -> cho phép xóa hẳn
+        await Voucher_MD.findByIdAndDelete(req.params.id);
+
+        // Xóa timeout nếu có
         clearVoucherTimeout(voucher._id);
 
-        return res.status(200).json({ message: "Xóa voucher thành công" });
+        return res.status(200).json({
+            message: "Xóa voucher thành công."
+        });
+
     } catch (error) {
         return res.status(500).json({
             message: "Lỗi khi xóa voucher",

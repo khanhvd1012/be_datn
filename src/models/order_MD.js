@@ -95,7 +95,7 @@ const orderSchema = new mongoose.Schema({
     payment_status: {
         type: String,
         enum: {
-            values: ['unpaid', 'paid', 'canceled', 'refund_processing', 'refunded'],
+            values: ['unpaid', 'processing_payment', 'paid', 'canceled', 'refund_processing', 'refunded'],
             message: 'Trạng thái thanh toán {VALUE} không hợp lệ'
         },
         default: 'unpaid'
@@ -184,7 +184,7 @@ const orderSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
-    
+
     shipping_fee: { type: Number, default: 0 },
     shipping_service: { type: String, default: null },
     images: [{

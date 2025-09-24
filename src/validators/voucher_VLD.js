@@ -36,14 +36,6 @@ const voucherSchema = Joi.object({
             'number.max': 'Phần trăm giảm giá không được vượt quá 100%'
         }),
 
-    maxDiscount: Joi.number()
-        .min(0)
-        .allow(null)
-        .messages({
-            'number.base': 'Giảm giá tối đa phải là số',
-            'number.min': 'Giảm giá tối đa không được âm'
-        }),
-
     minOrderValue: Joi.number()
         .min(0)
         .default(0)
