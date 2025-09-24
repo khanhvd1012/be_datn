@@ -1550,10 +1550,7 @@ export const returnOrderByCustomer = async (req, res) => {
         return res.status(500).json({ message: "Lỗi hoàn hàng", error: error.message });
     }
 };
-<<<<<<< HEAD
 
-=======
->>>>>>> 58187a69bfaed2cc0cd12d88d09ce71421509eed
 export const calculateOrderTotal = async (req, res) => {
     try {
         const {
@@ -1610,30 +1607,18 @@ export const calculateOrderTotal = async (req, res) => {
         // Tính voucher discount
         let voucher_discount = 0;
         let voucher_info = null;
-<<<<<<< HEAD
-
-        if (voucher_code) {
-            const voucher = await Voucher_MD.findOne({
-                code: voucher_code.toUpperCase(),
-                status: 'active',
-=======
 
         if (voucher_code) {
             const voucher = await Voucher_MD.findOne({
                 code: voucher_code.toUpperCase(),
                 isActive: true,
->>>>>>> 58187a69bfaed2cc0cd12d88d09ce71421509eed
                 startDate: { $lte: new Date() },
                 endDate: { $gte: new Date() },
                 $expr: { $lt: ["$usedCount", "$quantity"] }
             });
 
             if (!voucher) {
-<<<<<<< HEAD
                 return res.status(400).json({
-=======
-                return res.status(400).json({
->>>>>>> 58187a69bfaed2cc0cd12d88d09ce71421509eed
                     message: "Mã giảm giá không hợp lệ hoặc đã hết",
                     sub_total,
                     voucher_discount: 0,
@@ -1643,11 +1628,7 @@ export const calculateOrderTotal = async (req, res) => {
             }
 
             if (sub_total < voucher.minOrderValue) {
-<<<<<<< HEAD
                 return res.status(400).json({
-=======
-                return res.status(400).json({
->>>>>>> 58187a69bfaed2cc0cd12d88d09ce71421509eed
                     message: `Đơn tối thiểu để dùng voucher là ${voucher.minOrderValue.toLocaleString()}đ`,
                     sub_total,
                     voucher_discount: 0,
@@ -1655,17 +1636,12 @@ export const calculateOrderTotal = async (req, res) => {
                     total_price: sub_total
                 });
             }
-<<<<<<< HEAD
-            if (voucher.type === "percentage") {
-                voucher_discount = (sub_total * voucher.value) / 100;
-=======
 
             if (voucher.type === "percentage") {
                 voucher_discount = (sub_total * voucher.value) / 100;
                 if (voucher.maxDiscount) {
                     voucher_discount = Math.min(voucher_discount, voucher.maxDiscount);
                 }
->>>>>>> 58187a69bfaed2cc0cd12d88d09ce71421509eed
             } else {
                 voucher_discount = voucher.value;
             }
@@ -1674,10 +1650,7 @@ export const calculateOrderTotal = async (req, res) => {
                 code: voucher.code,
                 type: voucher.type,
                 value: voucher.value,
-<<<<<<< HEAD
-=======
                 maxDiscount: voucher.maxDiscount,
->>>>>>> 58187a69bfaed2cc0cd12d88d09ce71421509eed
                 minOrderValue: voucher.minOrderValue
             };
         }
