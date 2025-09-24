@@ -681,7 +681,7 @@ export const updateOrderStatus = async (req, res) => {
         } else if (status === 'return_accepted') {
             order.return_accepted_at = new Date();
             order.return_accepted_by = req.user._id;
-            // Nếu đơn hàng ZaloPay, chuyển sang refund_processing
+            // FIXED: Chỉ chuyển sang refund_processing khi chấp nhận hoàn hàng (không phải khi yêu cầu)
             if (order.payment_method === 'ZALOPAY' && order.payment_status === 'paid') {
                 order.payment_status = 'refund_processing';
                 order.refund_processed_at = new Date();
@@ -693,12 +693,7 @@ export const updateOrderStatus = async (req, res) => {
             order.return_reject_reason = reject_reason || 'Không đủ điều kiện hoàn hàng';
         } else if (status === 'returned') {
             order.returned_at = new Date();
-            // Nếu đơn hàng ZaloPay, chuyển sang refund_processing
-            if (order.payment_method === 'ZALOPAY' && order.payment_status === 'paid') {
-                order.payment_status = 'refund_processing';
-                order.refund_processed_at = new Date();
-                order.refund_processed_by = req.user._id;
-            }
+            // FIXED: Bỏ logic tự động chuyển sang refund_processing ở đây vì đã xử lý ở return_accepted
         } else if (status === 'returned_received') {
             order.returned_received_at = new Date();
             order.returned_received_by = req.user._id;
@@ -706,25 +701,8 @@ export const updateOrderStatus = async (req, res) => {
 
         await order.save();
 
-        // Map trạng thái ra text
-        function getStatusText(status) {
-            const statusMap = {
-                'pending': 'Chờ xử lý',
-                'processing': 'Đang xử lý',
-                'shipped': 'Đang giao hàng',
-                'delivered': 'Đã giao hàng',
-                'return_requested': 'Yêu cầu hoàn hàng',
-                'return_accepted': 'Chấp nhận hoàn hàng',
-                'return_rejected': 'Từ chối hoàn hàng',
-                'returned': 'Đã hoàn hàng',
-                'canceled': 'Đã hủy'
-            };
-            return statusMap[status] || status;
-        }
-
-        // Gửi thông báo tùy theo trạng thái
-        let notificationMessage = `Đơn hàng #${order.order_code} của bạn đã chuyển sang trạng thái: ${getStatusText(status)}`;
-
+        // Gửi thông báo cho khách hàng
+        let notificationMessage = `Đơn hàng #${order.order_code} của bạn đã chuyển sang trạng thái: ${order.status}`;
         if (status === 'return_rejected') {
             notificationMessage += `. Lý do: ${reject_reason || 'Không đủ điều kiện hoàn hàng'}`;
         } else if (status === 'returned_received') {
@@ -749,8 +727,7 @@ export const updateOrderStatus = async (req, res) => {
         const adminUsers = await User_MD.find({ role: { $in: ['admin', 'employee'] } });
 
         for (const admin of adminUsers) {
-            let adminMessage = `Đơn hàng #${order.order_code} đã chuyển sang trạng thái: ${getStatusText(status)}`;
-
+            let adminMessage = `Đơn hàng #${order.order_code} đã chuyển sang trạng thái: ${order.status}`;
             if (status === 'return_rejected') {
                 adminMessage += `. Lý do từ chối: ${reject_reason || 'Không đủ điều kiện hoàn hàng'}`;
             } else if (status === 'returned_received') {
@@ -1132,12 +1109,8 @@ export const requestReturn = async (req, res) => {
         order.return_reason = return_reason || 'Khách hàng yêu cầu hoàn hàng';
         order.images = imageUrls;
 
-        // Cập nhật trạng thái thanh toán cho ZALOPAY
-        if (order.payment_method === 'ZALOPAY' && order.payment_status === 'paid') {
-            order.payment_status = 'refund_processing';
-            order.refund_processed_at = new Date();
-            order.refund_processed_by = req.user._id;
-        }
+        // FIXED: Bỏ logic tự động chuyển trạng thái thanh toán cho ZaloPay
+        // ZaloPay cũng phải chờ admin xét duyệt như COD
 
         await order.save();
 
