@@ -52,7 +52,7 @@ export const getDashboardStats = async (req, res) => {
                 }
             },
             { $unwind: "$order" },
-            { $match: { "order.status": "delivered" } },
+            { $match: { "order.status": "delivered", "order.payment_status": "paid" } },
             {
                 $group: {
                     _id: "$variant_id", // group theo variant
@@ -141,6 +141,7 @@ export const getDashboardStats = async (req, res) => {
             {
                 $match: {
                     status: "delivered",
+                    payment_status: "paid",
                     delivered_at: { $gte: start, $lte: end },
                 },
             },
@@ -167,6 +168,7 @@ export const getDashboardStats = async (req, res) => {
             {
                 $match: {
                     status: "delivered",
+                    payment_status: "paid",
                     delivered_at: {
                         $gte: new Date(`${startYear}-01-01`),
                         $lte: new Date(`${endYear}-12-31`),
