@@ -70,7 +70,8 @@ const orderSchema = new mongoose.Schema({
                 'delivered', 
                 'return_requested',  // Khách hàng yêu cầu hoàn hàng
                 'return_accepted',   // Admin chấp nhận hoàn hàng
-                'return_rejected',   // Admin từ chối hoàn hàng
+                'return_rejected',// Admin từ chối hoàn hàng
+                'returned_received',  
                 'returned',          // Hoàn hàng thành công
                 'canceled'
             ],
