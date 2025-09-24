@@ -1528,3 +1528,149 @@ export const returnOrderByCustomer = async (req, res) => {
         return res.status(500).json({ message: "Lỗi hoàn hàng", error: error.message });
     }
 };
+export const calculateOrderTotal = async (req, res) => {
+    try {
+        const {
+            cart_id,
+            variant_id, // cho mua ngay
+            quantity, // cho mua ngay
+            voucher_code,
+            toDistrictId,
+            toWardCode,
+            province_id,
+            district_id,
+            ward_code
+        } = req.body;
+
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({ message: "Vui lòng đăng nhập để tiếp tục" });
+        }
+
+        let sub_total = 0;
+        let totalWeight = 0;
+
+        // Xử lý cho mua từ giỏ hàng
+        if (cart_id) {
+            const cart = await Cart_MD.findOne({ _id: cart_id }).populate({
+                path: "cart_items",
+                populate: {
+                    path: "variant_id",
+                    select: "price weight"
+                }
+            });
+
+            if (!cart || !cart.cart_items?.length) {
+                return res.status(400).json({ message: "Giỏ hàng trống" });
+            }
+
+            for (const item of cart.cart_items) {
+                sub_total += (item.variant_id?.price || 0) * item.quantity;
+                totalWeight += (item.variant_id?.weight || 200) * item.quantity;
+            }
+        }
+        // Xử lý cho mua ngay
+        else if (variant_id && quantity) {
+            const variant = await Variant_MD.findById(variant_id);
+            if (!variant) {
+                return res.status(404).json({ message: "Sản phẩm không tồn tại" });
+            }
+            sub_total = variant.price * quantity;
+            totalWeight = (variant.weight || 200) * quantity;
+        }
+        else {
+            return res.status(400).json({ message: "Thiếu thông tin sản phẩm" });
+        }
+
+        // Tính voucher discount
+        let voucher_discount = 0;
+        let voucher_info = null;
+        
+        if (voucher_code) {
+            const voucher = await Voucher_MD.findOne({
+                code: voucher_code.toUpperCase(),
+                isActive: true,
+                startDate: { $lte: new Date() },
+                endDate: { $gte: new Date() },
+                $expr: { $lt: ["$usedCount", "$quantity"] }
+            });
+
+            if (!voucher) {
+                return res.status(400).json({ 
+                    message: "Mã giảm giá không hợp lệ hoặc đã hết",
+                    sub_total,
+                    voucher_discount: 0,
+                    shipping_fee: 0,
+                    total_price: sub_total
+                });
+            }
+
+            if (sub_total < voucher.minOrderValue) {
+                return res.status(400).json({ 
+                    message: `Đơn tối thiểu để dùng voucher là ${voucher.minOrderValue.toLocaleString()}đ`,
+                    sub_total,
+                    voucher_discount: 0,
+                    shipping_fee: 0,
+                    total_price: sub_total
+                });
+            }
+
+            if (voucher.type === "percentage") {
+                voucher_discount = (sub_total * voucher.value) / 100;
+                if (voucher.maxDiscount) {
+                    voucher_discount = Math.min(voucher_discount, voucher.maxDiscount);
+                }
+            } else {
+                voucher_discount = voucher.value;
+            }
+
+            voucher_info = {
+                code: voucher.code,
+                type: voucher.type,
+                value: voucher.value,
+                maxDiscount: voucher.maxDiscount,
+                minOrderValue: voucher.minOrderValue
+            };
+        }
+
+        // Tính phí vận chuyển
+        let shipping_fee = 0;
+        let shipping_service = null;
+
+        try {
+            const districtIdForFee = toDistrictId || district_id;
+            const wardCodeForFee = toWardCode || ward_code;
+
+            if (districtIdForFee && wardCodeForFee) {
+                const { service, fee } = await getAutoShippingFee({
+                    toDistrictId: districtIdForFee,
+                    toWardCode: wardCodeForFee,
+                    weight: totalWeight
+                });
+                shipping_fee = fee.total;
+                shipping_service = service;
+            }
+        } catch (err) {
+            console.error("GHN fee error:", err.message);
+            // Không return error, chỉ để shipping_fee = 0
+        }
+
+        const total_price = sub_total - voucher_discount + shipping_fee;
+
+        return res.status(200).json({
+            success: true,
+            sub_total,
+            voucher_discount,
+            shipping_fee,
+            total_price,
+            voucher_info,
+            shipping_service: shipping_service?.short_name || null
+        });
+
+    } catch (error) {
+        console.error("Lỗi tính toán đơn hàng:", error);
+        return res.status(500).json({
+            message: "Lỗi server khi tính toán",
+            error: error.message
+        });
+    }
+};
