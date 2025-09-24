@@ -13,7 +13,7 @@ orderRouter.get("/", authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), get
 orderRouter.get("/user", authMiddleware, getAllOrderUser);
 orderRouter.post("/buy-now", authMiddleware, buyNowOrder)
 orderRouter.get("/:id", authMiddleware, getOrderById);
-orderRouter.put("/:id", authMiddleware, updateOrderStatus);
+orderRouter.put("/:id", authMiddleware, upload.array("images", 5), updateOrderStatus);
 orderRouter.put("/:id/cancel", authMiddleware, cancelOrder);
 orderRouter.put("/:id/return", authMiddleware, returnOrderByCustomer);
 orderRouter.get("/:id/admin", authMiddleware, checkRole(ROLES.ADMIN, ROLES.EMPLOYEE), getOrderByIdAdmin);

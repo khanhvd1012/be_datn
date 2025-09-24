@@ -175,6 +175,9 @@ const orderSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
+    return_received_at: {
+        type: Date, default: null
+    },
     // Xác nhận nhận hàng
     confirmed_received: {
         type: Boolean,
@@ -184,7 +187,7 @@ const orderSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
-    
+
     shipping_fee: { type: Number, default: 0 },
     shipping_service: { type: String, default: null },
     images: [{
