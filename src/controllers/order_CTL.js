@@ -204,7 +204,7 @@ export const createOrder = async (req, res) => {
         if (voucher_code) {
             voucher = await Voucher_MD.findOne({
                 code: voucher_code.toUpperCase(),
-                isActive: true,
+                status: 'active',
                 startDate: { $lte: new Date() },
                 endDate: { $gte: new Date() },
                 $expr: { $lt: ["$usedCount", "$quantity"] },
@@ -217,10 +217,10 @@ export const createOrder = async (req, res) => {
             }
             if (voucher.type === "percentage") {
                 voucher_discount = (sub_total * voucher.value) / 100;
-                if (voucher.maxDiscount) voucher_discount = Math.min(voucher_discount, voucher.maxDiscount);
             } else {
                 voucher_discount = voucher.value;
             }
+
             voucher.usedCount += 1;
             await voucher.save();
         }
@@ -1503,7 +1503,7 @@ export const buyNowOrder = async (req, res) => {
         if (voucher_code) {
             voucher = await Voucher_MD.findOne({
                 code: voucher_code.toUpperCase(),
-                isActive: true,
+                status: 'active',
                 startDate: { $lte: new Date() },
                 endDate: { $gte: new Date() },
                 $expr: { $lt: ["$usedCount", "$quantity"] }
@@ -1516,10 +1516,10 @@ export const buyNowOrder = async (req, res) => {
 
             if (voucher.type === "percentage") {
                 voucher_discount = (sub_total * voucher.value) / 100;
-                if (voucher.maxDiscount) voucher_discount = Math.min(voucher_discount, voucher.maxDiscount);
             } else {
                 voucher_discount = voucher.value;
             }
+
             voucher.usedCount += 1;
             await voucher.save();
         }
@@ -1781,7 +1781,7 @@ export const calculateOrderTotal = async (req, res) => {
         if (voucher_code) {
             const voucher = await Voucher_MD.findOne({
                 code: voucher_code.toUpperCase(),
-                isActive: true,
+                status: 'active',
                 startDate: { $lte: new Date() },
                 endDate: { $gte: new Date() },
                 $expr: { $lt: ["$usedCount", "$quantity"] }
@@ -1809,9 +1809,6 @@ export const calculateOrderTotal = async (req, res) => {
 
             if (voucher.type === "percentage") {
                 voucher_discount = (sub_total * voucher.value) / 100;
-                if (voucher.maxDiscount) {
-                    voucher_discount = Math.min(voucher_discount, voucher.maxDiscount);
-                }
             } else {
                 voucher_discount = voucher.value;
             }
@@ -1820,7 +1817,6 @@ export const calculateOrderTotal = async (req, res) => {
                 code: voucher.code,
                 type: voucher.type,
                 value: voucher.value,
-                maxDiscount: voucher.maxDiscount,
                 minOrderValue: voucher.minOrderValue
             };
         }
