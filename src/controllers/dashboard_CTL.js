@@ -2,13 +2,15 @@ import Product from "../models/product_MD";
 import Order from "../models/order_MD";
 import OrderItem from "../models/orderItem_MD";
 import User from "../models/auth_MD";
+import dayjs from "dayjs";
 
 export const getDashboardStats = async (req, res) => {
     try {
-        const [totalProducts, totalOrders, totalUsers] = await Promise.all([
+        const [totalProducts, totalOrders, totalUsers, deliveredPaidOrders] = await Promise.all([
             Product.countDocuments(),
             Order.countDocuments(),
-            User.countDocuments()
+            User.countDocuments(),
+            Order.countDocuments({ status: "delivered", payment_status: "paid" })
         ]);
 
         const productsByCategory = await Product.aggregate([
@@ -42,6 +44,7 @@ export const getDashboardStats = async (req, res) => {
             }
         ]);
 
+        // Top products - chỉ tính những đơn đã thanh toán thực tế
         const topProducts = await OrderItem.aggregate([
             {
                 $lookup: {
@@ -54,29 +57,22 @@ export const getDashboardStats = async (req, res) => {
             { $unwind: "$order" },
             {
                 $match: {
-                    $or: [
-                        {
-                            "order.status": "delivered",
-                            "order.payment_status": "paid"
-                        },
-                        {
-                            "order.payment_status": "paid"
-                        }
-                    ]
+                    "order.status": { $in: ["delivered", "return_rejected"] },
+                    "order.payment_status": "paid"
                 }
             },
             {
                 $group: {
-                    _id: "$variant_id", // group theo variant
+                    _id: "$variant_id",
                     totalSales: { $sum: "$quantity" },
                     totalRevenue: { $sum: { $multiply: ["$quantity", "$price"] } },
-                    product_id: { $first: "$product_id" } // lưu lại product_id
+                    product_id: { $first: "$product_id" }
                 }
             },
             {
                 $lookup: {
                     from: "products",
-                    localField: "product_id",   // dùng product_id để join sang products
+                    localField: "product_id",
                     foreignField: "_id",
                     as: "product"
                 }
@@ -85,7 +81,7 @@ export const getDashboardStats = async (req, res) => {
             {
                 $lookup: {
                     from: "variants",
-                    localField: "_id",          // _id lúc này là variant_id
+                    localField: "_id",
                     foreignField: "_id",
                     as: "variant"
                 }
@@ -148,137 +144,503 @@ export const getDashboardStats = async (req, res) => {
             cur.setDate(cur.getDate() + 1);
         }
 
-        // --- doanh thu theo khoảng ngày ---
-        const revenueAgg = await Order.aggregate([
+        // ===== DOANH THU KÉP: NGÀY ĐẶT + THỰC TẾ =====
+
+        // 1. DOANH THU THEO NGÀY ĐẶT (Order Date Revenue)
+        const revenueByOrderDateAgg = await Order.aggregate([
             {
                 $match: {
-                    $or: [
-                        {
-                            status: "delivered",
-                            payment_status: "paid"
-                        },
-                        {
-                            payment_status: "paid"
+                    createdAt: { $gte: start, $lte: end },
+                    status: { $nin: ["canceled"] }
+                }
+            },
+            {
+                $addFields: {
+                    orderAmount: { $subtract: ["$sub_total", "$voucher_discount"] },
+                    revenueMultiplier: {
+                        $cond: {
+                            if: { $in: ["$status", ["returned_received", "returned"]] },
+                            then: -1,
+                            else: 1
                         }
-                    ],
-                    delivered_at: { $gte: start, $lte: end },
-                },
-            },
-            {
-                $group: {
-                    _id: null,
-                    revenue: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } },
-                },
-            },
-        ]);
-
-        let { startSingle, endSingle } = req.query;
-
-        let start5, end5;
-        if (startSingle && endSingle) {
-            // nếu FE truyền ngày cụ thể
-            start5 = new Date(startSingle);
-            end5 = new Date(endSingle);
-            start5.setHours(0, 0, 0, 0);
-            end5.setHours(23, 59, 59, 999);
-        } else {
-            // mặc định 5 ngày gần nhất
-            const today = new Date();
-            const threeDaysAgo = new Date();
-            threeDaysAgo.setDate(today.getDate() - 4); 
-            start5 = new Date(threeDaysAgo.setHours(0, 0, 0, 0));
-            end5 = new Date(today.setHours(23, 59, 59, 999));
-        }
-
-        const revenueByDayAgg = await Order.aggregate([
-            {
-                $match: {
-                    $or: [
-                        { status: "delivered", payment_status: "paid" },
-                        { payment_status: "paid" }
-                    ],
-                    delivered_at: { $gte: start5, $lte: end5 }
+                    }
                 }
             },
             {
                 $group: {
                     _id: {
-                        $dateToString: { format: "%Y-%m-%d", date: "$delivered_at" }
+                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
                     },
-                    revenue: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } }
+                    revenue: {
+                        $sum: {
+                            $multiply: ["$orderAmount", "$revenueMultiplier"]
+                        }
+                    }
                 }
             },
             { $sort: { _id: 1 } }
         ]);
 
-        // Bổ sung các ngày không có đơn để đủ 5 ngày
-        const revenueLast5Days = [];
-        let curDay = new Date(start5);
-        while (curDay <= end5) {
-            const y = curDay.getFullYear();
-            const m = String(curDay.getMonth() + 1).padStart(2, '0');
-            const d = String(curDay.getDate()).padStart(2, '0');
-            const dateStr = `${y}-${m}-${d}`;
-            const found = revenueByDayAgg.find(item => item._id === dateStr);
-            revenueLast5Days.push({
-                date: dateStr,
-                revenue: found ? found.revenue : 0
-            });
-            curDay.setDate(curDay.getDate() + 1);
-        }
-
-        let { startYear, endYear } = req.query;
-        const currentYear = new Date().getFullYear();
-
-        if (!startYear || !endYear) {
-            endYear = currentYear;
-            startYear = endYear - 4;
-        } else {
-            startYear = parseInt(startYear, 10);
-            endYear = parseInt(endYear, 10);
-        }
-
-        const revenueByYearAgg = await Order.aggregate([
+        // 2. DOANH THU THỰC TẾ (Actual Revenue)
+        const actualRevenueByDateAgg = await Order.aggregate([
             {
                 $match: {
                     $or: [
                         {
-                            status: "delivered",
-                            payment_status: "paid"
+                            payment_method: "COD",
+                            payment_status: "paid",
+                            payment_date: { $gte: start, $lte: end }
                         },
                         {
-                            payment_status: "paid"
+                            payment_method: "ZALOPAY",
+                            payment_status: "paid",
+                            createdAt: { $gte: start, $lte: end }
+                        },
+                        {
+                            payment_method: "ZALOPAY",
+                            status: { $in: ["returned_received", "returned"] },
+                            returned_received_at: { $gte: start, $lte: end }
                         }
-                    ],
-                    delivered_at: {
-                        $gte: new Date(`${startYear}-01-01`),
-                        $lte: new Date(`${endYear}-12-31`),
+                    ]
+                }
+            },
+            {
+                $addFields: {
+                    revenueDate: {
+                        $cond: {
+                            if: { $eq: ["$payment_method", "COD"] },
+                            then: "$payment_date",
+                            else: {
+                                $cond: {
+                                    if: { $in: ["$status", ["returned_received", "returned"]] },
+                                    then: "$returned_received_at",
+                                    else: "$createdAt"
+                                }
+                            }
+                        }
                     },
-                },
+                    orderAmount: { $subtract: ["$sub_total", "$voucher_discount"] },
+                    revenueMultiplier: {
+                        $cond: {
+                            if: { $in: ["$status", ["returned_received", "returned"]] },
+                            then: -1,
+                            else: 1
+                        }
+                    }
+                }
+            },
+            {
+                $match: {
+                    revenueDate: { $ne: null } // Ensure revenueDate is not null
+                }
             },
             {
                 $group: {
-                    _id: { $year: "$delivered_at" },
-                    revenue: { $sum: { $subtract: ["$sub_total", "$voucher_discount"] } },
-                },
+                    _id: {
+                        $dateToString: { format: "%Y-%m-%d", date: "$revenueDate" }
+                    },
+                    actualRevenue: {
+                        $sum: {
+                            $multiply: ["$orderAmount", "$revenueMultiplier"]
+                        }
+                    }
+                }
             },
-            { $sort: { _id: 1 } },
-            {
-                $project: {
-                    year: "$_id",
-                    revenue: 1,
-                    _id: 0,
-                },
-            },
+            { $sort: { _id: 1 } }
         ]);
 
+        // 3. Tổng hợp doanh thu theo ngày
+        const revenueByDate = [];
+        cur = new Date(start.getTime());
+        while (cur <= end) {
+            const year = cur.getFullYear();
+            const month = (cur.getMonth() + 1).toString().padStart(2, "0");
+            const day = cur.getDate().toString().padStart(2, "0");
+            const dateStr = `${year}-${month}-${day}`;
+
+            const orderDateRevenue = revenueByOrderDateAgg.find((item) => item._id === dateStr);
+            const actualRevenue = actualRevenueByDateAgg.find((item) => item._id === dateStr);
+
+            const orderRevenue = orderDateRevenue ? orderDateRevenue.revenue : 0;
+            const actRevenue = actualRevenue ? actualRevenue.actualRevenue : 0;
+
+            revenueByDate.push({
+                date: dateStr,
+                orderRevenue,
+                actualRevenue: actRevenue,
+                difference: orderRevenue - actRevenue
+            });
+            cur.setDate(cur.getDate() + 1);
+        }
+
+        // ===== DOANH THU TỔNG =====
+        const totalOrderRevenue = revenueByOrderDateAgg.reduce((sum, item) => sum + item.revenue, 0);
+        const totalActualRevenue = actualRevenueByDateAgg.reduce((sum, item) => sum + item.actualRevenue, 0);
+
+        // ===== DOANH THU 7 NGÀY GẦN NHẤT =====
+        const today7 = new Date();
+        const sixDaysAgo = new Date();
+        sixDaysAgo.setDate(today7.getDate() - 6);
+        const start7 = new Date(sixDaysAgo.setHours(0, 0, 0, 0));
+        const end7 = new Date(today7.setHours(23, 59, 59, 999));
+
+        const revenueLast7DaysOrder = await Order.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: start7, $lte: end7 },
+                    status: { $nin: ["canceled"] }
+                }
+            },
+            {
+                $addFields: {
+                    orderAmount: { $subtract: ["$sub_total", "$voucher_discount"] },
+                    revenueMultiplier: {
+                        $cond: {
+                            if: { $in: ["$status", ["returned_received", "returned"]] },
+                            then: -1,
+                            else: 1
+                        }
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
+                    },
+                    revenue: { $sum: { $multiply: ["$orderAmount", "$revenueMultiplier"] } }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        const revenueLast7DaysActual = await Order.aggregate([
+            {
+                $match: {
+                    $or: [
+                        {
+                            payment_method: "COD",
+                            payment_status: "paid",
+                            payment_date: { $gte: start7, $lte: end7 }
+                        },
+                        {
+                            payment_method: "ZALOPAY",
+                            payment_status: "paid",
+                            createdAt: { $gte: start7, $lte: end7 }
+                        },
+                        {
+                            payment_method: "ZALOPAY",
+                            status: { $in: ["returned_received", "returned"] },
+                            returned_received_at: { $gte: start7, $lte: end7 }
+                        }
+                    ]
+                }
+            },
+            {
+                $addFields: {
+                    revenueDate: {
+                        $cond: {
+                            if: { $eq: ["$payment_method", "COD"] },
+                            then: "$payment_date",
+                            else: {
+                                $cond: {
+                                    if: { $in: ["$status", ["returned_received", "returned"]] },
+                                    then: "$returned_received_at",
+                                    else: "$createdAt"
+                                }
+                            }
+                        }
+                    },
+                    orderAmount: { $subtract: ["$sub_total", "$voucher_discount"] },
+                    revenueMultiplier: {
+                        $cond: {
+                            if: { $in: ["$status", ["returned_received", "returned"]] },
+                            then: -1,
+                            else: 1
+                        }
+                    }
+                }
+            },
+            {
+                $match: {
+                    revenueDate: { $ne: null } // Ensure revenueDate is not null
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: "%Y-%m-%d", date: "$revenueDate" }
+                    },
+                    actualRevenue: { $sum: { $multiply: ["$orderAmount", "$revenueMultiplier"] } }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        const revenueLast7Days = [];
+        let curDay = new Date(start7);
+        while (curDay <= end7) {
+            const y = curDay.getFullYear();
+            const m = String(curDay.getMonth() + 1).padStart(2, '0');
+            const d = String(curDay.getDate()).padStart(2, '0');
+            const dateStr = `${y}-${m}-${d}`;
+
+            const orderRev = revenueLast7DaysOrder.find(item => item._id === dateStr);
+            const actualRev = revenueLast7DaysActual.find(item => item._id === dateStr);
+
+            const orderRevenue = orderRev ? orderRev.revenue : 0;
+            const actRevenue = actualRev ? actualRev.actualRevenue : 0;
+
+            revenueLast7Days.push({
+                date: dateStr,
+                orderRevenue,
+                actualRevenue: actRevenue,
+                difference: orderRevenue - actRevenue
+            });
+            curDay.setDate(curDay.getDate() + 1);
+        }
+
+        // ========================== DOANH THU THEO NĂM ==========================
+        const startYear = dayjs().subtract(4, "year").year();
+        const endYear = dayjs().year();
+
+        // 1. Doanh thu đơn hàng theo năm (orderRevenue - theo ngày đặt)
+        const revenueByYearOrderAgg = await Order.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: new Date(`${startYear}-01-01`), $lte: new Date(`${endYear}-12-31`) },
+                    status: { $nin: ["canceled"] }
+                }
+            },
+            {
+                $addFields: {
+                    orderAmount: { $subtract: ["$sub_total", "$voucher_discount"] },
+                    revenueMultiplier: {
+                        $cond: { if: { $in: ["$status", ["returned_received", "returned"]] }, then: -1, else: 1 }
+                    },
+                    year: { $year: "$createdAt" }
+                }
+            },
+            {
+                $group: {
+                    _id: "$year",
+                    orderRevenue: { $sum: { $multiply: ["$orderAmount", "$revenueMultiplier"] } }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // 2. Doanh thu thực tế theo năm (actualRevenue)
+        const revenueByYearActualAgg = await Order.aggregate([
+            {
+                $match: {
+                    $or: [
+                        {
+                            payment_method: "COD",
+                            payment_status: "paid",
+                            payment_date: { $gte: new Date(`${startYear}-01-01`), $lte: new Date(`${endYear}-12-31`) }
+                        },
+                        {
+                            payment_method: "ZALOPAY",
+                            payment_status: "paid",
+                            createdAt: { $gte: new Date(`${startYear}-01-01`), $lte: new Date(`${endYear}-12-31`) }
+                        },
+                        {
+                            payment_method: "ZALOPAY",
+                            status: { $in: ["returned_received", "returned"] },
+                            returned_received_at: { $gte: new Date(`${startYear}-01-01`), $lte: new Date(`${endYear}-12-31`) }
+                        }
+                    ]
+                }
+            },
+            {
+                $addFields: {
+                    revenueDate: {
+                        $cond: {
+                            if: { $eq: ["$payment_method", "COD"] },
+                            then: "$payment_date",
+                            else: {
+                                $cond: {
+                                    if: { $in: ["$status", ["returned_received", "returned"]] },
+                                    then: "$returned_received_at",
+                                    else: "$createdAt"
+                                }
+                            }
+                        }
+                    },
+                    orderAmount: { $subtract: ["$sub_total", "$voucher_discount"] },
+                    revenueMultiplier: {
+                        $cond: { if: { $in: ["$status", ["returned_received", "returned"]] }, then: -1, else: 1 }
+                    }
+                }
+            },
+            {
+                $match: {
+                    revenueDate: { $ne: null } // Ensure revenueDate is not null
+                }
+            },
+            {
+                $group: {
+                    _id: { $year: "$revenueDate" },
+                    actualRevenue: { $sum: { $multiply: ["$orderAmount", "$revenueMultiplier"] } }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // 3. Kết hợp kết quả thành revenueByYear đầy đủ
         const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+
         const revenueByYear = years.map((year) => {
-            const found = revenueByYearAgg.find((item) => item.year === year);
-            return found || { year, revenue: 0 };
+            const orderRev = revenueByYearOrderAgg.find(item => item._id === year);
+            const actualRev = revenueByYearActualAgg.find(item => item._id === year);
+
+            const orderRevenue = orderRev ? orderRev.orderRevenue : 0;
+            const actRevenue = actualRev ? actualRev.actualRevenue : 0;
+
+            return {
+                year,
+                orderRevenue,
+                actualRevenue: actRevenue,
+                difference: orderRevenue - actRevenue
+            };
         });
 
-        const revenue = revenueAgg[0]?.revenue || 0;
+        // ===== DOANH THU THEO THÁNG (Dựa trên query hoặc 12 tháng gần nhất) =====
+        let { startMonth, endMonth } = req.query;
+        const now = new Date();
+        let startMonthDate, endMonthDate;
+
+        if (startMonth && endMonth) {
+            startMonthDate = new Date(`${startMonth}-01`);
+            endMonthDate = new Date(`${endMonth}-01`);
+            endMonthDate.setMonth(endMonthDate.getMonth() + 1);
+            endMonthDate.setDate(0);
+        } else {
+            startMonthDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+            endMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        }
+        startMonthDate.setHours(0, 0, 0, 0);
+        endMonthDate.setHours(23, 59, 59, 999);
+
+        // 1. Doanh thu theo tháng đặt hàng (orderRevenue)
+        const revenueByMonthOrderAgg = await Order.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: startMonthDate, $lte: endMonthDate },
+                    status: { $nin: ["canceled"] }
+                }
+            },
+            {
+                $addFields: {
+                    orderAmount: { $subtract: ["$sub_total", "$voucher_discount"] },
+                    revenueMultiplier: {
+                        $cond: {
+                            if: { $in: ["$status", ["returned_received", "returned"]] },
+                            then: -1,
+                            else: 1
+                        }
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: "%Y-%m", date: "$createdAt" }
+                    },
+                    orderRevenue: { $sum: { $multiply: ["$orderAmount", "$revenueMultiplier"] } }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // 2. Doanh thu thực tế theo tháng (actualRevenue)
+        const revenueByMonthActualAgg = await Order.aggregate([
+            {
+                $match: {
+                    $or: [
+                        {
+                            payment_method: "COD",
+                            payment_status: "paid",
+                            payment_date: { $gte: startMonthDate, $lte: endMonthDate }
+                        },
+                        {
+                            payment_method: "ZALOPAY",
+                            payment_status: "paid",
+                            createdAt: { $gte: startMonthDate, $lte: endMonthDate }
+                        },
+                        {
+                            payment_method: "ZALOPAY",
+                            status: { $in: ["returned_received", "returned"] },
+                            returned_received_at: { $gte: startMonthDate, $lte: endMonthDate }
+                        }
+                    ]
+                }
+            },
+            {
+                $addFields: {
+                    revenueDate: {
+                        $cond: {
+                            if: { $eq: ["$payment_method", "COD"] },
+                            then: "$payment_date",
+                            else: {
+                                $cond: {
+                                    if: { $in: ["$status", ["returned_received", "returned"]] },
+                                    then: "$returned_received_at",
+                                    else: "$createdAt"
+                                }
+                            }
+                        }
+                    },
+                    orderAmount: { $subtract: ["$sub_total", "$voucher_discount"] },
+                    revenueMultiplier: {
+                        $cond: {
+                            if: { $in: ["$status", ["returned_received", "returned"]] },
+                            then: -1,
+                            else: 1
+                        }
+                    }
+                }
+            },
+            {
+                $match: {
+                    revenueDate: { $ne: null } // Ensure revenueDate is not null
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { format: "%Y-%m", date: "$revenueDate" }
+                    },
+                    actualRevenue: { $sum: { $multiply: ["$orderAmount", "$revenueMultiplier"] } }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // 3. Tổng hợp doanh thu theo tháng
+        const revenueByMonth = [];
+        let curMonth = new Date(startMonthDate);
+        while (curMonth <= endMonthDate) {
+            const year = curMonth.getFullYear();
+            const month = (curMonth.getMonth() + 1).toString().padStart(2, "0");
+            const yearMonth = `${year}-${month}`;
+
+            const orderRev = revenueByMonthOrderAgg.find(item => item._id === yearMonth);
+            const actualRev = revenueByMonthActualAgg.find(item => item._id === yearMonth);
+
+            const orderRevenue = orderRev ? orderRev.orderRevenue : 0;
+            const actRevenue = actualRev ? actualRev.actualRevenue : 0;
+
+            revenueByMonth.push({
+                yearMonth,
+                orderRevenue,
+                actualRevenue: actRevenue,
+                difference: orderRevenue - actRevenue
+            });
+
+            curMonth.setMonth(curMonth.getMonth() + 1);
+        }
 
         res.json({
             success: true,
@@ -289,9 +651,13 @@ export const getDashboardStats = async (req, res) => {
                 totalOrders,
                 totalUsers,
                 ordersByDate,
-                revenue,
+                revenueByDate,
+                totalOrderRevenue,
+                totalActualRevenue,
                 revenueByYear,
-                revenueLast5Days      
+                revenueLast7Days,
+                deliveredPaidOrders,
+                revenueByMonth
             }
         });
     } catch (error) {

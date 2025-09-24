@@ -238,7 +238,7 @@ orderSchema.virtual('trangThai').get(function () {
         'return_requested': 'Yêu cầu hoàn hàng',
         'return_accepted': 'Chấp nhận hoàn hàng',
         'return_rejected': 'Từ chối hoàn hàng',
-        'returned': 'Đã hoàn hàng',
+        'returned': 'hoàn hàng',
         'canceled': 'Đã hủy'
     };
     return statusMap[this.status] || this.status;
