@@ -195,6 +195,11 @@ const orderSchema = new mongoose.Schema({
         required: true,
         trim: true
     }],
+    return_images: [{
+        type: String,
+        required: true,
+        trim: true
+    }],
 }, {
     timestamps: true,
     toJSON: { virtuals: true },
